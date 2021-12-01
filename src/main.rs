@@ -48,12 +48,12 @@ mod test {
 
         assert_eq!(2000, firsts.len(), "expect vec len");
 
-        let sums: Vec<i64> = firsts[2..]
+        // zip3 iterating from thirds vector, then sum
+        let sums: Vec<i64> = firsts[2..] // thirds
             .iter()
-            .zip(firsts[1..].iter())
-            .map(|(third, second)| third + second)
-            .zip(firsts.iter())
-            .map(|(left, first)| left + first)
+            .zip(firsts[1..].iter()) // seconds
+            .zip(firsts.iter()) // firsts
+            .map(|((third, second), first)| third + second + first)
             .collect();
 
         let increases: Vec<i64> = sums[1..]
