@@ -111,3 +111,8 @@ target/
 # Ignore Gradle build output directory
 build
 bin/
+
+
+# Added by cargo
+
+/target

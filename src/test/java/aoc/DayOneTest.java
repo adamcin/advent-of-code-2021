@@ -1,5 +1,7 @@
 package aoc;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -33,7 +35,7 @@ public class DayOneTest {
                 .filter(value -> value > 0)
                 .collect(Collectors.toList());
 
-        System.out.println("n increases: " + increases.size());
+        assertEquals(1557, increases.size(), "expect increases size");
     }
 
     @Test
@@ -75,6 +77,6 @@ public class DayOneTest {
                 .filter(value -> value > 0)
                 .collect(Collectors.toList());
 
-        System.out.println("n increases: " + increases.size());
+        assertEquals(1608, increases.size(), "expect increases size");
     }
 }
