@@ -15,21 +15,20 @@ mod test {
         let file = File::open(filename).unwrap();
         let reader = BufReader::new(file);
 
-        let values = reader
+        let values: Vec<i64> = reader
             .lines()
-            .flat_map(|line| line.map(|str| str.parse::<i64>()))
+            .flat_map(|line| line.map(|str| str.parse()))
             .filter_map(|value| value.ok())
-            .collect::<Vec<_>>();
+            .collect();
 
         assert_eq!(2000, values.len(), "expect vec len");
 
-        let increases = values[1..]
+        let increases: Vec<i64> = values[1..]
             .iter()
-            //.copied()
             .zip(values.iter())
             .map(|(next, value)| next - value)
             .filter(|diff| diff > &0)
-            .collect::<Vec<_>>();
+            .collect();
 
         assert_eq!(1557, increases.len(), "expect increases len");
     }
@@ -41,11 +40,11 @@ mod test {
         let file = File::open(filename).unwrap();
         let reader = BufReader::new(file);
 
-        let firsts = reader
+        let firsts: Vec<i64> = reader
             .lines()
-            .flat_map(|line| line.map(|str| str.parse::<i64>()))
+            .flat_map(|line| line.map(|str| str.parse()))
             .filter_map(|value| value.ok())
-            .collect::<Vec<_>>();
+            .collect();
 
         assert_eq!(2000, firsts.len(), "expect vec len");
 
@@ -57,12 +56,12 @@ mod test {
             .map(|(left, first)| left + first)
             .collect();
 
-        let increases = sums[1..]
+        let increases: Vec<i64> = sums[1..]
             .iter()
             .zip(sums.iter())
             .map(|(next, value)| next - value)
             .filter(|diff| diff > &0)
-            .collect::<Vec<_>>();
+            .collect();
 
         assert_eq!(1608, increases.len(), "expect increases len");
     }
