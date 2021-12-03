@@ -207,12 +207,12 @@ mod test {
         let ones: Vec<i16> = input
             .iter()
             .map(|&reading| reading)
-            .filter(|reading| reading & multi == multi)
+            .filter(|&reading| reading & multi == multi)
             .collect();
         let zeros: Vec<i16> = input
             .iter()
             .map(|&reading| reading)
-            .filter(|reading| reading & multi != multi)
+            .filter(|&reading| reading & multi != multi)
             .collect();
         assert_eq!(input.len(), ones.len() + zeros.len(), "expect same total");
         assert_ne!(1000, ones.len(), "expect non-1000 ones");
@@ -223,7 +223,7 @@ mod test {
     #[test]
     fn day03_match_first() {
         let num: i16 = 0b110110110000;
-        let nums: Vec<i16> = [num].iter().map(|&item| item).collect();
+        let nums: Vec<i16> = [num].iter().map(|&value| value).collect();
         let (ones, zeros) = filter_bits(nums, 11);
         assert_eq!(1, ones.len(), "expect ones");
         assert_eq!(0, zeros.len(), "expect no zeros");
@@ -232,7 +232,7 @@ mod test {
     #[test]
     fn day03_match_third() {
         let num: i16 = 0b110110110000;
-        let nums: Vec<i16> = [num].iter().map(|&item| item).collect();
+        let nums: Vec<i16> = [num].iter().map(|&value| value).collect();
         let (ones, zeros) = filter_bits(nums, 9);
         assert_eq!(0, ones.len(), "expect no ones");
         assert_eq!(1, zeros.len(), "expect zeros");
@@ -241,10 +241,29 @@ mod test {
     #[test]
     fn day03_match_last() {
         let num: i16 = 0b110110110000;
-        let nums: Vec<i16> = [num].iter().map(|&item| item).collect();
+        let nums: Vec<i16> = [num].iter().map(|&value| value).collect();
         let (ones, zeros) = filter_bits(nums, 0);
         assert_eq!(0, ones.len(), "expect no ones");
         assert_eq!(1, zeros.len(), "expect zeros");
+    }
+
+    fn search_diagnostics(
+        original: Vec<i16>,
+        chooser: fn(usize, Vec<i16>, Vec<i16>) -> Vec<i16>,
+    ) -> i32 {
+        let reduced: Vec<i16> = (0..=11).rev().fold(original, |init, index| {
+            let init_len = init.len();
+
+            if init_len <= 1 {
+                return init;
+            }
+
+            let (ones, zeros) = filter_bits(init, index);
+            return chooser(init_len, ones, zeros);
+        });
+        assert_eq!(1, reduced.len(), "expect single element");
+        let element: i16 = reduced[0];
+        return element.into();
     }
 
     #[test]
@@ -261,64 +280,30 @@ mod test {
             .collect();
 
         assert_eq!(1000, readings.len(), "expect readings vec length");
-
+        let oxy_chooser: fn(usize, Vec<i16>, Vec<i16>) -> Vec<i16> = |init_len, ones, zeros| {
+            if zeros.len() == init_len {
+                return zeros;
+            } else if ones.len() == init_len || ones.len() * 2 >= init_len {
+                return ones;
+            } else {
+                return zeros;
+            }
+        };
         let init_oxys: Vec<i16> = readings.iter().map(|&item| item).collect();
+        let oxygen: i32 = search_diagnostics(init_oxys, oxy_chooser);
+
+        let scrub_chooser: fn(usize, Vec<i16>, Vec<i16>) -> Vec<i16> = |init_len, ones, zeros| {
+            if ones.len() == init_len {
+                return ones;
+            } else if zeros.len() == init_len || ones.len() * 2 >= init_len {
+                return zeros;
+            } else {
+                return ones;
+            }
+        };
         let init_scrubs: Vec<i16> = readings.iter().map(|&item| item).collect();
-        let mut range: Vec<u32> = (0..=11).collect();
-        range.reverse();
-        assert_eq!(12, range.len(), "fail!");
-        let (oxygens, scrubbers): (Vec<i16>, Vec<i16>) =
-            range
-                .iter()
-                .fold((init_oxys, init_scrubs), |(oxys, scrubs), &index| {
-                    let oxys_len = oxys.len();
-                    let scrubs_len = scrubs.len();
-                    let scrubs_copy: Vec<i16> = scrubs.iter().map(|&item| item).collect();
-                    if oxys_len <= 1 && scrubs_len <= 1 {
-                        return (oxys, scrubs);
-                    }
-                    let (oxy_ones, oxy_zeros) = filter_bits(oxys, index);
-                    let fewer_oxys = if oxy_zeros.len() == oxys_len {
-                        oxy_zeros
-                    } else if oxy_ones.len() == oxys_len || oxy_ones.len() * 2 >= oxys_len {
-                        oxy_ones
-                    } else {
-                        oxy_zeros
-                    };
+        let scrubber: i32 = search_diagnostics(init_scrubs, scrub_chooser);
 
-                    let (scrub_ones, scrub_zeros) = filter_bits(scrubs, index);
-                    let fewer_scrubs = if scrub_ones.len() == scrubs_len {
-                        scrub_ones
-                    } else if scrub_zeros.len() == scrubs_len || scrub_ones.len() * 2 >= scrubs_len {
-                        scrub_zeros
-                    } else {
-                        scrub_ones
-                    };
-
-                    if fewer_scrubs.len() == 0 {
-                        let mut filtered: String = "\n".to_owned();
-                        for scrub in scrubs_copy {
-                            let scrub_string: String = format!("{:b}\n", scrub);
-                            filtered.push_str(&scrub_string);
-                        }
-                        assert_ne!(
-                            0,
-                            fewer_scrubs.len(),
-                            "remaining scrubs is zero after index: {}, {}",
-                            index,
-                            filtered
-                        );
-                    }
-                    return (fewer_oxys, fewer_scrubs);
-                });
-
-        assert_eq!(1, oxygens.len(), "expect one oxygen");
-        assert_eq!(1, scrubbers.len(), "expect one scrubber");
-
-        let oxygen: i16 = oxygens[0];
-        let oxygen32: i32 = oxygen.into();
-        let scrubber: i16 = scrubbers[0];
-        let scrubber32: i32 = scrubber.into();
-        assert_eq!(3969126, oxygen32 * scrubber32, "expect lifesupport rating");
+        assert_eq!(3969126, oxygen * scrubber, "expect lifesupport rating");
     }
 }
