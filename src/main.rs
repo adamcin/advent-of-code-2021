@@ -319,6 +319,6 @@ mod test {
         let oxygen32: i32 = oxygen.into();
         let scrubber: i16 = scrubbers[0];
         let scrubber32: i32 = scrubber.into();
-        assert_eq!(0, oxygen32 * scrubber32, "expect lifesupport rating");
+        assert_eq!(3969126, oxygen32 * scrubber32, "expect lifesupport rating");
     }
 }
