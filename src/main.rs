@@ -369,20 +369,14 @@ mod test {
         }
     }
 
-    #[test]
-    fn day04part1() {
-        let filename = "data/day-04/input.txt";
+    fn day04read(filename: &str) -> (Vec<usize>, Vec<Board>) {
         // Open the file in read-only mode (ignoring errors).
         let file = File::open(filename).unwrap();
         let reader = BufReader::new(file);
-
         let mut calls: Vec<usize> = Vec::new();
         let mut board_srcs: Vec<Vec<Vec<usize>>> = Vec::new();
         board_srcs.push(Vec::new());
-
-        let input_lines: Vec<String> = reader.lines().flat_map(|line_r| line_r.ok()).collect();
-
-        for input_line in input_lines {
+        for input_line in reader.lines().flat_map(|line_r| line_r.ok()) {
             if calls.is_empty() {
                 let calls_s: Vec<usize> = input_line
                     .split(',')
@@ -406,45 +400,51 @@ mod test {
                 }
             }
         }
-
-        assert_eq!(101, board_srcs.len(), "expect number of board_srcs");
-
-        let mut boards: Vec<Board> = board_srcs
-            .iter()
-            .flat_map(|b_src| {
-                let mut values = [[0; 5]; 5];
-                let mut five_rows = false;
-                for (row_i, row_v) in b_src.iter().enumerate().take(5) {
-                    let mut five_cols = false;
-                    for (col_i, col_v) in row_v.iter().enumerate().take(5) {
-                        values[row_i][col_i] = *col_v;
-                        if col_i == 4 {
-                            five_cols = true;
-                        }
-                    }
-                    if row_i == 4 && five_cols {
-                        five_rows = true;
+        let boards: Vec<Board> = board_srcs
+        .iter()
+        .flat_map(|b_src| {
+            let mut values = [[0; 5]; 5];
+            let mut five_rows = false;
+            for (row_i, row_v) in b_src.iter().enumerate().take(5) {
+                let mut five_cols = false;
+                for (col_i, col_v) in row_v.iter().enumerate().take(5) {
+                    values[row_i][col_i] = *col_v;
+                    if col_i == 4 {
+                        five_cols = true;
                     }
                 }
-
-                let mut to_boards: Vec<Board> = Vec::new();
-                if five_rows {
-                    to_boards.push(Board {
-                        values: values,
-                        marks: [[false; 5]; 5],
-                        last_mark: 0,
-                    });
+                if row_i == 4 && five_cols {
+                    five_rows = true;
                 }
-                return to_boards;
-            })
-            .collect();
+            }
+
+            let mut to_boards: Vec<Board> = Vec::new();
+            if five_rows {
+                to_boards.push(Board {
+                    values: values,
+                    marks: [[false; 5]; 5],
+                    last_mark: 0,
+                });
+            }
+            return to_boards;
+        })
+        .collect();
+        (calls, boards)
+    }
+
+    #[test]
+    fn day04part1() {
+        let filename = "data/day-04/input.txt";
+        let (calls, mut boards) = day04read(&filename);
+        
         assert_eq!(100, boards.len(), "expect number of boards");
 
-        for call in calls.iter() {
-            for board in boards.iter_mut() {
+        'outer: for call in calls.iter() {
+            for (index, board) in boards.iter_mut().enumerate() {
                 if board.mark(*call) {
                     if board.check_bingo() {
-                        assert_eq!(39984, board.score(), "expect winning score");
+                        assert_eq!(39984, board.score(), "expect winning score {}", index);
+                        break 'outer;
                     }
                 }
             }
@@ -454,72 +454,8 @@ mod test {
     #[test]
     fn day04part2() {
         let filename = "data/day-04/input.txt";
-        // Open the file in read-only mode (ignoring errors).
-        let file = File::open(filename).unwrap();
-        let reader = BufReader::new(file);
-
-        let mut calls: Vec<usize> = Vec::new();
-        let mut board_srcs: Vec<Vec<Vec<usize>>> = Vec::new();
-        board_srcs.push(Vec::new());
-
-        let input_lines: Vec<String> = reader.lines().flat_map(|line_r| line_r.ok()).collect();
-
-        for input_line in input_lines {
-            if calls.is_empty() {
-                let calls_s: Vec<usize> = input_line
-                    .split(',')
-                    .filter_map(|call_s| call_s.parse().ok())
-                    .collect();
-                calls = calls_s;
-            }
-
-            if input_line.is_empty() {
-                if board_srcs.last().filter(|b| !b.is_empty()).is_some() {
-                    board_srcs.push(Vec::new());
-                }
-            } else {
-                if let Some(last_board) = board_srcs.last_mut() {
-                    last_board.push(
-                        input_line
-                            .split_ascii_whitespace()
-                            .flat_map(|value_s| value_s.parse())
-                            .collect(),
-                    );
-                }
-            }
-        }
-
-        assert_eq!(101, board_srcs.len(), "expect number of board_srcs");
-
-        let mut boards: Vec<Board> = board_srcs
-            .iter()
-            .flat_map(|b_src| {
-                let mut values = [[0; 5]; 5];
-                let mut five_rows = false;
-                for (row_i, row_v) in b_src.iter().enumerate().take(5) {
-                    let mut five_cols = false;
-                    for (col_i, col_v) in row_v.iter().enumerate().take(5) {
-                        values[row_i][col_i] = *col_v;
-                        if col_i == 4 {
-                            five_cols = true;
-                        }
-                    }
-                    if row_i == 4 && five_cols {
-                        five_rows = true;
-                    }
-                }
-
-                let mut to_boards: Vec<Board> = Vec::new();
-                if five_rows {
-                    to_boards.push(Board {
-                        values: values,
-                        marks: [[false; 5]; 5],
-                        last_mark: 0,
-                    });
-                }
-                return to_boards;
-            })
-            .collect();
+        let (calls, mut boards) = day04read(&filename);
+        
         assert_eq!(100, boards.len(), "expect number of boards");
 
         let mut scores: Vec<usize> = Vec::new();
