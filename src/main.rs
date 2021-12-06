@@ -830,7 +830,9 @@ mod test {
         }
 
         fn canonical(&self) -> Segment {
-            if self.to < self.from {
+            let (x1, y1) = self.from;
+            let (x2, y2) = self.to;
+            if x2 < x1 || x2 == x1 && y2 < y1 {
                 return Segment {
                     from: self.to,
                     to: self.from,
@@ -846,6 +848,7 @@ mod test {
             if left.from == right.from && left.to == right.to {
                 return Vec::new();
             }
+            
             if left.is_horizontal() && right.is_vertical() {
                 return left.map_points2(
                     &right,
@@ -858,6 +861,7 @@ mod test {
                     },
                 );
             }
+
             if left.is_vertical() && right.is_horizontal() {
                 return left.map_points2(
                     &right,
@@ -870,165 +874,93 @@ mod test {
                     },
                 );
             }
-            if left.is_horizontal() && right.is_horizontal() && left.is_colinear_with(&right) {
-                return left.map_points2(
-                    &right,
-                    |(sx1, sy1), (sx2, _), (ox1, _), (ox2, _)| -> Vec<Point> {
-                        let mut interxs = Vec::new();
-                        if between(sx1, ox1, ox2) && between(sx2, ox1, ox2) {
-                            for x in urange(sx1, sx2) {
-                                interxs.push((x, sy1));
-                            }
-                        } else if between(ox1, sx1, sx2) && between(ox2, sx1, sx2) {
-                            for x in urange(ox1, ox2) {
-                                interxs.push((x, sy1));
-                            }
-                        } else if between(sx1, ox1, ox2) && between(ox2, sx1, sx2) {
-                            for x in urange(sx1, ox2) {
-                                interxs.push((x, sy1));
-                            }
-                        } else if between(ox1, sx1, sx2) && between(sx2, ox1, ox2) {
-                            for x in urange(sx2, ox1) {
-                                interxs.push((x, sy1));
-                            }
-                        }
-                        return interxs;
-                    },
-                );
+
+            if left.might_intersect(&right) {
+                use std::collections::HashSet;
+                let left_points: HashSet<Point> = left.points().iter().map(|&e| e).collect();
+                let right_points: HashSet<Point> = right.points().iter().map(|&e| e).collect();
+                return left_points
+                    .intersection(&right_points)
+                    .map(|&e| e)
+                    .collect();
             }
-            if left.is_vertical() && right.is_vertical() && left.is_colinear_with(&right) {
-                return left.map_points2(
-                    &right,
-                    |(sx1, sy1), (_, sy2), (_, oy1), (_, oy2)| -> Vec<Point> {
-                        let mut interxs = Vec::new();
-                        if between(sy1, oy1, oy2) && between(sy2, oy1, oy2) {
-                            for y in urange(sy1, sy2) {
-                                interxs.push((sx1, y));
-                            }
-                        } else if between(oy1, sy1, sy2) && between(oy2, sy1, sy2) {
-                            for y in urange(oy1, oy2) {
-                                interxs.push((sx1, y));
-                            }
-                        } else if between(sy1, oy1, oy2) && between(oy2, sy1, sy2) {
-                            for y in urange(sy1, oy2) {
-                                interxs.push((sx1, y));
-                            }
-                        } else if between(oy1, sy1, sy2) && between(sy2, oy1, oy2) {
-                            for y in urange(sy2, oy1) {
-                                interxs.push((sx1, y));
-                            }
-                        }
-                        return interxs;
-                    },
-                );
+
+            return Vec::new();
+        }
+
+        fn is_parallel_to(&self, other: &Segment) -> bool {
+            return (self.is_horizontal() && other.is_horizontal())
+                || (self.is_vertical() && other.is_vertical())
+                || (self.is_rise_left() && other.is_rise_left())
+                || (self.is_rise_right() && other.is_rise_right());
+        }
+
+        fn might_intersect(&self, other: &Segment) -> bool {
+            if self.is_parallel_to(other) && !self.is_colinear_with(other) {
+                return false;
             }
-            if left.is_rise_left() && right.is_rise_left() && left.is_colinear_with(&right) {
-                fn x_for_y(y: usize, p1: Point, p2: Point) -> usize {
-                    let (x1, y1) = p1;
-                    let (x2, y2) = p2;
-                    // with rise left, use min x for min y. for rise right, use max x for min y
-                    return std::cmp::min(x1, x2) + (y - std::cmp::min(y1, y2));
-                }
-                return left.map_points2(
-                    &right,
-                    |(sx1, sy1), (sx2, sy2), (ox1, oy1), (ox2, oy2)| -> Vec<Point> {
-                        let mut interxs = Vec::new();
-                        if between(sy1, oy1, oy2) && between(sy2, oy1, oy2) {
-                            for y in urange(sy1, sy2) {
-                                interxs.push((x_for_y(y, (sx1, sy1), (sx2, sy2)), y));
-                            }
-                        } else if between(oy1, sy1, sy2) && between(oy2, sy1, sy2) {
-                            for y in urange(oy1, oy2) {
-                                interxs.push((x_for_y(y, (ox1, oy1), (ox2, oy2)), y));
-                            }
-                        } else if between(sy1, oy1, oy2) && between(oy2, sy1, sy2) {
-                            for y in urange(sy1, oy2) {
-                                interxs.push((x_for_y(y, (sx1, sy1), (ox2, oy2)), y));
-                            }
-                        } else if between(oy1, sy1, sy2) && between(sy2, oy1, oy2) {
-                            for y in urange(sy2, oy1) {
-                                interxs.push((x_for_y(y, (sx2, sy2), (ox1, oy1)), y));
-                            }
-                        }
-                        return interxs;
-                    },
-                );
-            }
-            if left.is_rise_right() && right.is_rise_right() && left.is_colinear_with(&right) {
-                fn x_for_y(y: usize, p1: Point, p2: Point) -> usize {
-                    let (x1, y1) = p1;
-                    let (x2, y2) = p2;
-                    // with rise left, use min x for min y. for rise right, use max x for min y
-                    return std::cmp::max(x1, x2) - (y - std::cmp::min(y1, y2));
-                }
-                return left.map_points2(
-                    &right,
-                    |(sx1, sy1), (sx2, sy2), (ox1, oy1), (ox2, oy2)| -> Vec<Point> {
-                        let mut interxs = Vec::new();
-                        if between(sy1, oy1, oy2) && between(sy2, oy1, oy2) {
-                            for y in urange(sy1, sy2) {
-                                interxs.push((x_for_y(y, (sx1, sy1), (sx2, sy2)), y));
-                            }
-                        } else if between(oy1, sy1, sy2) && between(oy2, sy1, sy2) {
-                            for y in urange(oy1, oy2) {
-                                interxs.push((x_for_y(y, (ox1, oy1), (ox2, oy2)), y));
-                            }
-                        } else if between(sy1, oy1, oy2) && between(oy2, sy1, sy2) {
-                            for y in urange(sy1, oy2) {
-                                interxs.push((x_for_y(y, (sx1, sy1), (ox2, oy2)), y));
-                            }
-                        } else if between(oy1, sy1, sy2) && between(sy2, oy1, oy2) {
-                            for y in urange(sy2, oy1) {
-                                interxs.push((x_for_y(y, (sx2, sy2), (ox1, oy1)), y));
-                            }
-                        }
-                        return interxs;
-                    },
-                );
-            }
-            use std::collections::HashSet;
-            let left_points: HashSet<Point> = left.points().iter().map(|&e| e).collect();
-            let right_points: HashSet<Point> = right.points().iter().map(|&e| e).collect();
-            return left_points.intersection(&right_points).map(|&e| e).collect();
+
+            let (lbx1, lby1) = self.min_corner();
+            let (lbx2, lby2) = self.max_corner();
+            let (rbx1, rby1) = other.min_corner();
+            let (rbx2, rby2) = other.max_corner();
+
+            let ibx1 = std::cmp::max(lbx1, rbx1);
+            let iby1 = std::cmp::max(lby1, rby1);
+            let ibx2 = std::cmp::min(lbx2, rbx2);
+            let iby2 = std::cmp::min(lby2, rby2);
+            return ibx2 >= ibx1 && iby2 >= iby1;
+        }
+
+        fn min_corner(&self) -> Point {
+            return self.map_points1(|(x1, y1), (x2, y2)| -> Point {
+                return (std::cmp::min(x1, x2), std::cmp::min(y1, y2));
+            });
+        }
+
+        fn max_corner(&self) -> Point {
+            return self.map_points1(|(x1, y1), (x2, y2)| -> Point {
+                return (std::cmp::max(x1, x2), std::cmp::max(y1, y2));
+            });
         }
 
         fn points(&self) -> Vec<Point> {
             let right = self.canonical();
             if right.is_horizontal() {
-                return right.map_points1(|(x1,y1),(x2,y2)| -> Vec<Point> {
+                return right.map_points1(|(x1, y1), (x2, y2)| -> Vec<Point> {
                     let mut points: Vec<Point> = Vec::new();
                     for x in urange(x1, x2) {
                         points.push((x, y1))
                     }
                     return points;
-                }); 
+                });
             }
             if right.is_vertical() {
-                return right.map_points1(|(x1,y1),(x2,y2)| -> Vec<Point> {
+                return right.map_points1(|(x1, y1), (x2, y2)| -> Vec<Point> {
                     let mut points: Vec<Point> = Vec::new();
                     for y in urange(y1, y2) {
                         points.push((x1, y))
                     }
                     return points;
-                }); 
+                });
             }
             if right.is_rise_left() {
-                return right.map_points1(|(x1,y1),(x2,y2)| -> Vec<Point> {
+                return right.map_points1(|(x1, y1), (x2, y2)| -> Vec<Point> {
                     let mut points: Vec<Point> = Vec::new();
                     for y in urange(y1, y2) {
                         points.push((std::cmp::min(x1, x2) + (y - std::cmp::min(y1, y2)), y))
                     }
                     return points;
-                }); 
+                });
             }
             if right.is_rise_right() {
-                return right.map_points1(|(x1,y1),(x2,y2)| -> Vec<Point> {
+                return right.map_points1(|(x1, y1), (x2, y2)| -> Vec<Point> {
                     let mut points: Vec<Point> = Vec::new();
                     for y in urange(y1, y2) {
                         points.push((std::cmp::max(x1, x2) - (y - std::cmp::min(y1, y2)), y))
                     }
                     return points;
-                }); 
+                });
             }
             return Vec::new();
         }
