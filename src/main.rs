@@ -206,12 +206,12 @@ mod test {
         let multi: i16 = (base).pow(index);
         let ones: Vec<i16> = input
             .iter()
-            .map(|&reading| reading)
+            .cloned()
             .filter(|&reading| reading & multi == multi)
             .collect();
         let zeros: Vec<i16> = input
             .iter()
-            .map(|&reading| reading)
+            .cloned()
             .filter(|&reading| reading & multi != multi)
             .collect();
         assert_eq!(input.len(), ones.len() + zeros.len(), "expect same total");
@@ -709,7 +709,7 @@ mod test {
         let segments = day05read(&filename);
         assert_eq!(500, segments.len(), "expect number of segments");
 
-        let comparisons: Vec<Segment> = segments.iter().map(|&e| e).collect();
+        let comparisons: Vec<Segment> = segments.iter().cloned().collect();
 
         let interxs: HashSet<Point> = segments
             .iter()
@@ -795,36 +795,45 @@ mod test {
             if left.from == right.from && left.to == right.to {
                 return false;
             }
-            if left.is_vertical() && right.is_vertical() {
-                return left.map_points2(&right, |(sx1, _), (_, _), (ox1, _), (_, _)| -> bool {
-                    return sx1 == ox1;
-                });
-            } else if left.is_horizontal() && right.is_horizontal() {
-                return left.map_points2(&right, |(_, sy1), (_, _), (_, oy1), (_, _)| -> bool {
-                    return sy1 == oy1;
-                });
-            } else if left.is_rise_left() && right.is_rise_left() {
-                return left.map_points2(
-                    &right,
-                    |(sx1, sy1), (sx2, sy2), (ox1, oy1), (ox2, oy2)| -> bool {
-                        let isy1: i32 = sy1 as i32;
-                        let isx1: i32 = sx1 as i32;
-                        let ioy1: i32 = oy1 as i32;
-                        let iox1: i32 = ox1 as i32;
-                        return isy1 - isx1 == ioy1 - iox1;
-                    },
-                );
-            } else if left.is_rise_right() && right.is_rise_right() {
-                return left.map_points2(
-                    &right,
-                    |(sx1, sy1), (sx2, sy2), (ox1, oy1), (ox2, oy2)| -> bool {
-                        let isy1: i32 = sy1 as i32;
-                        let isx1: i32 = sx1 as i32;
-                        let ioy1: i32 = oy1 as i32;
-                        let iox1: i32 = ox1 as i32;
-                        return isy1 + isx1 == ioy1 + iox1;
-                    },
-                );
+
+            if left.is_parallel_to(&right) {
+                if left.is_vertical() {
+                    return left.map_points2(
+                        &right,
+                        |(sx1, _), (_, _), (ox1, _), (_, _)| -> bool {
+                            return sx1 == ox1;
+                        },
+                    );
+                } else if left.is_horizontal() {
+                    return left.map_points2(
+                        &right,
+                        |(_, sy1), (_, _), (_, oy1), (_, _)| -> bool {
+                            return sy1 == oy1;
+                        },
+                    );
+                } else if left.is_rise_left() {
+                    return left.map_points2(
+                        &right,
+                        |(sx1, sy1), (_, _), (ox1, oy1), (_, _)| -> bool {
+                            let isy1: i32 = sy1 as i32;
+                            let isx1: i32 = sx1 as i32;
+                            let ioy1: i32 = oy1 as i32;
+                            let iox1: i32 = ox1 as i32;
+                            return isy1 - isx1 == ioy1 - iox1;
+                        },
+                    );
+                } else if left.is_rise_right() {
+                    return left.map_points2(
+                        &right,
+                        |(sx1, sy1), (_, _), (ox1, oy1), (_, _)| -> bool {
+                            let isy1: i32 = sy1 as i32;
+                            let isx1: i32 = sx1 as i32;
+                            let ioy1: i32 = oy1 as i32;
+                            let iox1: i32 = ox1 as i32;
+                            return isy1 + isx1 == ioy1 + iox1;
+                        },
+                    );
+                }
             }
             return false;
         }
@@ -848,43 +857,16 @@ mod test {
             if left.from == right.from && left.to == right.to {
                 return Vec::new();
             }
-            
-            if left.is_horizontal() && right.is_vertical() {
-                return left.map_points2(
-                    &right,
-                    |(sx1, sy1), (sx2, _), (ox1, oy1), (_, oy2)| -> Vec<Point> {
-                        let mut interxs = Vec::new();
-                        if between(sy1, oy1, oy2) && between(ox1, sx1, sx2) {
-                            interxs.push((ox1, sy1));
-                        }
-                        return interxs;
-                    },
-                );
-            }
-
-            if left.is_vertical() && right.is_horizontal() {
-                return left.map_points2(
-                    &right,
-                    |(sx1, sy1), (_, sy2), (ox1, oy1), (ox2, _)| -> Vec<Point> {
-                        let mut interxs = Vec::new();
-                        if between(sx1, ox1, ox2) && between(oy1, sy1, sy2) {
-                            interxs.push((sx1, oy1));
-                        }
-                        return interxs;
-                    },
-                );
-            }
-
-            if left.might_intersect(&right) {
+            if let Some(point) = left.linear_intersection(&right) {
+                let mut interxs = Vec::new();
+                interxs.push(point);
+                return interxs;
+            } else if left.is_colinear_with(&right) {
                 use std::collections::HashSet;
-                let left_points: HashSet<Point> = left.points().iter().map(|&e| e).collect();
-                let right_points: HashSet<Point> = right.points().iter().map(|&e| e).collect();
-                return left_points
-                    .intersection(&right_points)
-                    .map(|&e| e)
-                    .collect();
+                let left_points: HashSet<Point> = left.points().iter().cloned().collect();
+                let right_points: HashSet<Point> = right.points().iter().cloned().collect();
+                return left_points.intersection(&right_points).cloned().collect();
             }
-
             return Vec::new();
         }
 
@@ -895,39 +877,111 @@ mod test {
                 || (self.is_rise_right() && other.is_rise_right());
         }
 
-        fn might_intersect(&self, other: &Segment) -> bool {
-            if self.is_parallel_to(other) && !self.is_colinear_with(other) {
-                return false;
+        fn _solve_for_x(&self, other: &Segment) -> Option<usize> {
+            if other.is_horizontal() {
+                return other._solve_for_x(self);
+            } else if self.is_horizontal() {
+                let (_, sy1) = self.from;
+                if other.is_rise_left() {
+                    let (ox1, oy1) = other.from;
+                    let z = (oy1 as i32) - (ox1 as i32);
+                    let ix = (sy1 as i32) - z;
+                    if ix >= 0 {
+                        return Some(ix as usize);
+                    }
+                } else if other.is_rise_right() {
+                    let (ox1, oy1) = other.from;
+                    let z = (oy1 as i32) + (ox1 as i32);
+                    let ix = -1 * ((sy1 as i32) - z);
+                    if ix >= 0 {
+                        return Some(ix as usize);
+                    }
+                }
+            } else if self.is_rise_left() {
+                let (sx1, sy1) = self.from;
+                let sz = (sy1 as i32) - (sx1 as i32);
+                if other.is_rise_right() {
+                    let (ox1, oy1) = other.from;
+                    let oz = (oy1 as i32) + (ox1 as i32);
+                    if (oz - sz) % 2 != 0 {
+                        return None;
+                    }
+                    let ix = (oz - sz) / 2;
+                    if ix >= 0 {
+                        return Some(ix as usize);
+                    }
+                }
             }
-
-            let (lbx1, lby1) = self.min_corner();
-            let (lbx2, lby2) = self.max_corner();
-            let (rbx1, rby1) = other.min_corner();
-            let (rbx2, rby2) = other.max_corner();
-
-            let ibx1 = std::cmp::max(lbx1, rbx1);
-            let iby1 = std::cmp::max(lby1, rby1);
-            let ibx2 = std::cmp::min(lbx2, rbx2);
-            let iby2 = std::cmp::min(lby2, rby2);
-            return ibx2 >= ibx1 && iby2 >= iby1;
+            None
         }
 
-        fn min_corner(&self) -> Point {
-            return self.map_points1(|(x1, y1), (x2, y2)| -> Point {
-                return (std::cmp::min(x1, x2), std::cmp::min(y1, y2));
-            });
+        fn linear_intersection(&self, other: &Segment) -> Option<Point> {
+            if !self.is_parallel_to(&other) {
+                if self.is_vertical() || other.is_vertical() {
+                    return self._vertical_intersection(other);
+                }
+                let (sx1, sy1) = self.from;
+                let (sx2, sy2) = self.to;
+                let (ox1, oy1) = other.from;
+                let (ox2, oy2) = other.to;
+                return self
+                    ._solve_for_x(other)
+                    .filter(|x| between(*x, sx1, sx2) && between(*x, ox1, ox2))
+                    .and_then(|x| self._y_for_x(x))
+                    .filter(|(_, y1)| between(*y1, sy1, sy2) && between(*y1, oy1, oy2));
+            }
+            return None;
         }
 
-        fn max_corner(&self) -> Point {
-            return self.map_points1(|(x1, y1), (x2, y2)| -> Point {
-                return (std::cmp::max(x1, x2), std::cmp::max(y1, y2));
-            });
+        fn _y_for_x(&self, x: usize) -> Option<Point> {
+            if self.is_horizontal() {
+                let (_, y1) = self.from;
+                return Some((x, y1));
+            } else if self.is_rise_right() {
+                let (x1, y1) = self.from;
+                let (_, y2) = self.to;
+                let iz = (y1 as i32) + (x1 as i32);
+                let y = iz - (x as i32);
+                if y >= 0 && between(y as usize, y1, y2) {
+                    return Some((x, (y as usize)));
+                }
+            } else if self.is_rise_left() {
+                let (x1, y1) = self.from;
+                let (_, y2) = self.to;
+                let iz = (y1 as i32) - (x1 as i32);
+                let y = iz + (x as i32);
+                if y >= 0 && between(y as usize, y1, y2) {
+                    return Some((x, (y as usize)));
+                }
+            }
+            None
+        }
+
+        fn _vertical_intersection(&self, other: &Segment) -> Option<Point> {
+            if self.is_vertical() {
+                if other.is_vertical() {
+                    return None;
+                }
+                let (sx1, sy1) = self.from;
+                let (_, sy2) = self.to;
+                let (ox1, oy1) = other.from;
+                let (ox2, oy2) = other.to;
+                return other._y_for_x(sx1).filter(|(x1, y1)| {
+                    sx1 == *x1
+                        && between(*x1, ox1, ox2)
+                        && between(*y1, sy1, sy2)
+                        && between(*y1, oy1, oy2)
+                });
+            } else if other.is_vertical() {
+                return other._vertical_intersection(self);
+            }
+            return None;
         }
 
         fn points(&self) -> Vec<Point> {
             let right = self.canonical();
             if right.is_horizontal() {
-                return right.map_points1(|(x1, y1), (x2, y2)| -> Vec<Point> {
+                return right.map_points1(|(x1, y1), (x2, _)| -> Vec<Point> {
                     let mut points: Vec<Point> = Vec::new();
                     for x in urange(x1, x2) {
                         points.push((x, y1))
@@ -936,7 +990,7 @@ mod test {
                 });
             }
             if right.is_vertical() {
-                return right.map_points1(|(x1, y1), (x2, y2)| -> Vec<Point> {
+                return right.map_points1(|(x1, y1), (_, y2)| -> Vec<Point> {
                     let mut points: Vec<Point> = Vec::new();
                     for y in urange(y1, y2) {
                         points.push((x1, y))
