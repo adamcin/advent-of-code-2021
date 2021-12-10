@@ -1,0 +1,37 @@
+{
+  "name": "adamcin-advent-of-code-2021-ts",
+  "version": "1.0.0",
+  "description": "TypeScript example starter project",
+  "devDependencies": {
+    "@babel/core": "^7.16.0",
+    "@babel/preset-env": "^7.16.4",
+    "@babel/preset-typescript": "^7.16.0",
+    "@types/jest": "^27.0.3",
+    "@types/node": "^16.11.12",
+    "@typescript-eslint/eslint-plugin": "^5.6.0",
+    "@typescript-eslint/parser": "^5.6.0",
+    "babel-jest": "^27.4.4",
+    "eslint": "^8.4.1",
+    "jest": "^27.4.4",
+    "typescript": "^4.5.3"
+  },
+  "main": "index.js",
+  "directories": {
+    "test": "ts-tests"
+  },
+  "scripts": {
+    "build": "rm -rf ./build && tsc",
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamcin/advent-of-code-2021.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/adamcin/advent-of-code-2021/issues"
+  },
+  "homepage": "https://github.com/adamcin/advent-of-code-2021#readme"
+}

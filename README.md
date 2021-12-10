@@ -24,3 +24,18 @@ I needed a reason to try Rust, so I dropped Java after completing the day 01 sol
 
 * Implement a part1 or part2 test fn in main.rs with an `assert_eq!` expression to force printing of the result in `cargo test`. If I believe the result, I submit it to AoC to see if it works, and if so, update the expected arg in the assertion.
 
+## Phase 2: TypeScript
+
+* Ran `npm install -y`
+
+* Ran `npx tsc --init --rootDir ts-src --outDir build --esModuleInterop --resolveJsonModule --lib es6 --module commonjs --allowJs false --noImplicitAny true`
+
+* Ran `npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin`
+
+* Ran `npm install -g eslint && eslint --init`
+
+* Ran `npm install --save-dev jest @types/jest babel-jest @babel/core @babel/preset-env @babel/preset-typescript`
+
+* Ran `npm install -g jest && jest --init`
+
+
