@@ -1,0 +1,35 @@
+{
+  "name": "advent-of-code-2021",
+  "version": "1.0.0",
+  "description": "Started over vacation in NC when I only had my iPad with me. Thus, my primary constraint for this year's solutions will continue to be using only my iPad, by running GitHub CodeSpaces in this repo.",
+  "main": "ts-build/index.js",
+  "types": "ts-build/index.d.ts",
+  "scripts": {
+    "prebuild": "rm -rf ./ts-build",
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "tsc -p tsconfig.spec.json --noEmit",
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamcin/advent-of-code-2021.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/adamcin/advent-of-code-2021/issues"
+  },
+  "homepage": "https://github.com/adamcin/advent-of-code-2021#readme",
+  "dependencies": {
+    "rxjs": "^7.4.0"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.16.4",
+    "@types/jest": "^27.0.3",
+    "babel-jest": "^27.4.4",
+    "jest": "^27.4.4",
+    "ts-jest": "^27.1.1",
+    "typescript": "^4.5.3"
+  }
+}

@@ -112,7 +112,7 @@ target/
 build
 bin/
 
-
+ts-build/
 # Added by cargo
 
 /target
