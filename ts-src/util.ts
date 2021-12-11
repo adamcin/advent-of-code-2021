@@ -2,14 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as Rx from 'rxjs';
 import { map, scan, concatWith, concatMap } from 'rxjs/operators';
-
-const _readTestInput =
-    (name: string, callback: (err: NodeJS.ErrnoException | null, data: Buffer) => void): void =>
-        fs.readFile(path.join('data', name, 'input.txt'), callback);
+import { Observable } from 'rxjs';
 
 
-
-export const readTestInput = Rx.bindNodeCallback(_readTestInput);
+export const readTestInput = (name: string): Observable<Buffer> => {
+    var rsEmitter = fs.createReadStream(path.join('data', name, 'input.txt'), 'utf-8');
+    return Rx.from(rsEmitter);
+};
 
 export const readTestInputLines = (name: string) => readTestInput(name)
     .pipe(
