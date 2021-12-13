@@ -66,7 +66,6 @@ type AllInput = (Vec<Coord>, Vec<FoldInst>);
 
 use std::collections::HashSet;
 fn fold(coords: &Vec<Coord>, inst: &FoldInst) -> Vec<Coord> {
-    println!("fold {:?}", inst);
     let mut indexes: Vec<usize> = Vec::new();
     let folded: Vec<(usize, Coord)> = match *inst {
         Left { value } => coords
@@ -93,11 +92,9 @@ fn fold(coords: &Vec<Coord>, inst: &FoldInst) -> Vec<Coord> {
     for i in indexes {
         remove_folded.remove(i);
     }
-    
     for coord in remove_folded {
         new_coords.insert(coord);
     }
-    
     return new_coords.iter().cloned().collect();
 }
 
@@ -127,10 +124,10 @@ fn max(left: usize, right: usize) -> usize {
 #[test]
 fn day13part2() {
     let (coords, folds) = read();
-    let folded = folds.iter().fold(coords, |acc,inst| fold(&acc, &inst));
+    let folded = folds.iter().fold(coords, |acc, inst| fold(&acc, &inst));
 
-    let max_x = folded.iter().fold(0, |ax,(x,_)| max(ax, *x));
-    let max_y = folded.iter().fold(0, |ay,(_,y)| max(ay, *y));
+    let max_x = folded.iter().fold(0, |ax, (x, _)| max(ax, *x));
+    let max_y = folded.iter().fold(0, |ay, (_, y)| max(ay, *y));
 
     println!("{:?}", (max_x, max_y));
 
@@ -147,7 +144,7 @@ fn day13part2() {
             if points.contains(&point) {
                 print!("#");
             } else {
-                print!(".");
+                print!(" ");
             }
         }
         println!("");
