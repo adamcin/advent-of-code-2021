@@ -1,5 +1,15 @@
 mod common;
-
+/// --- Day 5: Hydrothermal Venture ---
+///
+/// You come across a field of hydrothermal vents on the ocean floor! These vents constantly produce 
+/// large, opaque clouds, so it would be best to avoid them if possible.
+///
+/// They tend to form in lines; the submarine helpfully produces a list of nearby lines of vents 
+/// (your puzzle input) for you to review.
+/// 
+/// Each line of vents is given as a line segment in the format x1,y1 -> x2,y2 where x1,y1 are the 
+/// coordinates of one end the line segment and x2,y2 are the coordinates of the other end. These 
+/// line segments include the points at both ends.
 fn read() -> Vec<Segment> {
     let values: Vec<Segment> = common::read_test_input("data/day-05/input.txt")
         .iter()
@@ -158,7 +168,7 @@ fn day05part0() {
         .collect();
     assert_eq!(6, straights.len(), "expect number of straight segments");
 
-    let comparisons: Vec<Segment> = straights.iter().map(|&e| e).collect();
+    let comparisons: Vec<Segment> = straights.iter().cloned().collect();
     use std::collections::HashSet;
     let interxs: HashSet<Point> = straights
         .iter()
@@ -169,7 +179,7 @@ fn day05part0() {
         })
         .collect();
 
-    let mut sorted: Vec<Point> = interxs.iter().map(|&e| e).collect();
+    let mut sorted: Vec<Point> = interxs.iter().cloned().collect();
     sorted.sort();
 
     let mut display: String = "".to_owned();
@@ -177,7 +187,7 @@ fn day05part0() {
         let formatted = format!("{}, {}\n", x, y);
         display.push_str(&formatted);
     }
-
+    println!("{}", display.as_str());
     assert_eq!(
         5,
         interxs.len(),
@@ -186,6 +196,10 @@ fn day05part0() {
     );
 }
 
+/// To avoid the most dangerous areas, you need to determine the number of points where at least 
+/// two lines overlap.
+/// 
+/// Consider only horizontal and vertical lines. At how many points do at least two lines overlap?
 #[test]
 fn day05part1() {
     use std::collections::HashSet;
@@ -199,7 +213,7 @@ fn day05part1() {
         .collect();
     assert_eq!(357, straights.len(), "expect number of straight segments");
 
-    let comparisons: Vec<Segment> = straights.iter().map(|&e| e).collect();
+    let comparisons: Vec<Segment> = straights.iter().cloned().collect();
 
     let interxs: HashSet<Point> = straights
         .iter()
@@ -210,13 +224,17 @@ fn day05part1() {
         })
         .collect();
 
-    let mut sorted: Vec<Point> = interxs.iter().map(|&e| e).collect();
+    let mut sorted: Vec<Point> = interxs.iter().cloned().collect();
     sorted.sort();
     assert_ne!(4022, interxs.len(), "4022 is too low");
     assert_ne!(8508, interxs.len(), "8508 is too high");
     assert_eq!(7142, interxs.len(), "expect number of intersections");
 }
 
+/// To avoid the most dangerous areas, you need to determine the number of points where at least 
+/// two lines overlap.
+/// 
+/// Consider all of the lines. At how many points do at least two lines overlap?
 #[test]
 fn day05part2() {
     use std::collections::HashSet;
@@ -272,13 +290,13 @@ impl Segment {
         });
     }
 
-    fn is_rise_right(&self) -> bool {
+    fn falls_over_x(&self) -> bool {
         return self.canonical().map_points1(|(x1, y1), (x2, y2)| -> bool {
             return x2 > x1 && y2 < y1;
         });
     }
 
-    fn is_rise_left(&self) -> bool {
+    fn rises_over_x(&self) -> bool {
         return self.canonical().map_points1(|(x1, y1), (x2, y2)| -> bool {
             return x2 > x1 && y2 > y1;
         });
@@ -320,7 +338,7 @@ impl Segment {
                 return left.map_points2(&right, |(_, sy1), (_, _), (_, oy1), (_, _)| -> bool {
                     return sy1 == oy1;
                 });
-            } else if left.is_rise_left() {
+            } else if left.rises_over_x() {
                 return left.map_points2(
                     &right,
                     |(sx1, sy1), (_, _), (ox1, oy1), (_, _)| -> bool {
@@ -331,7 +349,7 @@ impl Segment {
                         return isy1 - isx1 == ioy1 - iox1;
                     },
                 );
-            } else if left.is_rise_right() {
+            } else if left.falls_over_x() {
                 return left.map_points2(
                     &right,
                     |(sx1, sy1), (_, _), (ox1, oy1), (_, _)| -> bool {
@@ -382,8 +400,8 @@ impl Segment {
     fn is_parallel_to(&self, other: &Segment) -> bool {
         return (self.is_horizontal() && other.is_horizontal())
             || (self.is_vertical() && other.is_vertical())
-            || (self.is_rise_left() && other.is_rise_left())
-            || (self.is_rise_right() && other.is_rise_right());
+            || (self.rises_over_x() && other.rises_over_x())
+            || (self.falls_over_x() && other.falls_over_x());
     }
 
     fn _solve_for_x(&self, other: &Segment) -> Option<usize> {
@@ -391,14 +409,14 @@ impl Segment {
             return other._solve_for_x(self);
         } else if self.is_horizontal() {
             let (_, sy1) = self.from;
-            if other.is_rise_left() {
+            if other.rises_over_x() {
                 let (ox1, oy1) = other.from;
                 let z = (oy1 as i32) - (ox1 as i32);
                 let ix = (sy1 as i32) - z;
                 if ix >= 0 {
                     return Some(ix as usize);
                 }
-            } else if other.is_rise_right() {
+            } else if other.falls_over_x() {
                 let (ox1, oy1) = other.from;
                 let z = (oy1 as i32) + (ox1 as i32);
                 let ix = -1 * ((sy1 as i32) - z);
@@ -406,10 +424,10 @@ impl Segment {
                     return Some(ix as usize);
                 }
             }
-        } else if self.is_rise_left() {
+        } else if self.rises_over_x() {
             let (sx1, sy1) = self.from;
             let sz = (sy1 as i32) - (sx1 as i32);
-            if other.is_rise_right() {
+            if other.falls_over_x() {
                 let (ox1, oy1) = other.from;
                 let oz = (oy1 as i32) + (ox1 as i32);
                 if (oz - sz) % 2 != 0 {
@@ -446,7 +464,7 @@ impl Segment {
         if self.is_horizontal() {
             let (_, y1) = self.from;
             return Some((x, y1));
-        } else if self.is_rise_right() {
+        } else if self.falls_over_x() {
             let (x1, y1) = self.from;
             let (_, y2) = self.to;
             let iz = (y1 as i32) + (x1 as i32);
@@ -454,7 +472,7 @@ impl Segment {
             if y >= 0 && between(y as usize, y1, y2) {
                 return Some((x, (y as usize)));
             }
-        } else if self.is_rise_left() {
+        } else if self.rises_over_x() {
             let (x1, y1) = self.from;
             let (_, y2) = self.to;
             let iz = (y1 as i32) - (x1 as i32);
@@ -507,7 +525,7 @@ impl Segment {
                 return points;
             });
         }
-        if right.is_rise_left() {
+        if right.rises_over_x() {
             return right.map_points1(|(x1, y1), (x2, y2)| -> Vec<Point> {
                 let mut points: Vec<Point> = Vec::new();
                 for y in urange(y1, y2) {
@@ -516,7 +534,7 @@ impl Segment {
                 return points;
             });
         }
-        if right.is_rise_right() {
+        if right.falls_over_x() {
             return right.map_points1(|(x1, y1), (x2, y2)| -> Vec<Point> {
                 let mut points: Vec<Point> = Vec::new();
                 for y in urange(y1, y2) {
