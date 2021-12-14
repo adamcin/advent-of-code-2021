@@ -48,12 +48,6 @@ test('part 0 solution', () => {
                     .flatMap(seg => straights
                         .flatMap(other =>
                             seg.intersections(other)));
-                            // 0, 9
-                            // 1, 9
-                            // 2, 9
-                            // 3, 4
-                            // 7, 4
-                console.log(dedupePoints(xns));
                 return dedupePoints(xns);
             }),
         ));
