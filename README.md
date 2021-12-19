@@ -14,6 +14,8 @@ My day 01 solution started in Java with Gradle because I started later in the da
 
 * Maximum efficiency in VS Code in a browser on an iPad appears to come from avoiding project explorer GUI operations like the plague. Use a language that allows for all solution code to live in one file, so you can swipe to navigate between functions, modules, etc., instead of fat-fingering your way around the source tree in the tiny column. Use Terminal as much as possible for Git operations.
 
+* Cmd+F binding is totally useless and frustrating in Firefox on iPad. Going to see if my copy-paste issues are also a Firefox-specific issue and not an issue on Safari.
+
 ## This is now a Rust project
 
 I needed a reason to try Rust, so I dropped Java after completing the day 01 solution and reimplemented it in rust. I tried generating tests using the VS Code features expecting the Rust extension to create something in the right place. That didn't work, so I copied the hello world example from some tutorial that had a test module right in main.rs, and I'm continuing to add 2 unit tests for each day without adding any non-test code. 
