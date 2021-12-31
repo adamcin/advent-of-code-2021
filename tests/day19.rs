@@ -1297,6 +1297,13 @@ impl Relatives {
         Self::trace_relativity(&self.get(id))
     }
 
+    fn as_root(&self, root: usize) -> Self {
+        Self {
+            root: root,
+            rels: self.rels.to_owned(),
+        }
+    }
+
     /// returns last scanner origin, and the last orient at that origin
     fn trace_relativity(hops: &[Relativity]) -> (Point, Orient) {
         hops.iter().fold(
@@ -1444,6 +1451,54 @@ fn day19part1() {
         ScannerSearch::collect_beacons(&scanners, &relatives).len(),
         "expect true number of beacons"
     );
+}
+
+#[test]
+fn day19part2() {
+    let scanners = read();
+    let relatives = day19part1_solution_relatives();
+    let dists = ScannerSearch::man_dists(&scanners, &relatives);
+    let (pair, max_dist) = dists.iter().fold(((0, 0), 0), |(last_pair, last_dist), (pair, dist)| {
+        if *dist > last_dist {
+            (*pair, *dist)
+        } else {
+            (last_pair, last_dist)
+        }
+    });
+    assert_eq!(8507, max_dist, "expect max dist");
+}
+
+#[test]
+fn day19_test_pre_part2() {
+    let scanners = read_test();
+    let relatives = Relatives {
+        root: 0,
+        rels: HashMap::from_iter(
+            [
+                ((4, 2), ((168, -1125, 72).into(), Orient::new(NegZ, X))),
+                ((2, 4), ((1125, -168, 72).into(), Orient::new(NegZ, X))),
+                ((1, 4), ((88, 113, -1104).into(), Orient::new(NegY, X))),
+                ((1, 3), ((160, -1134, -23).into(), Orient::new(Z, Y))),
+                ((3, 1), ((-160, 1134, 23).into(), Orient::new(Z, Y))),
+                ((1, 0), ((68, 1246, -43).into(), Orient::new(NegZ, Y))),
+                ((4, 1), ((-1104, -88, 113).into(), Orient::new(NegX, NegZ))),
+                ((0, 1), ((68, -1246, -43).into(), Orient::new(NegZ, Y))),
+            ]
+            .iter()
+            .cloned(),
+        ),
+    };
+
+    let dists = ScannerSearch::man_dists(&scanners, &relatives);
+    let (pair, max_dist) = dists.iter().fold(((0, 0), 0), |(last_pair, last_dist), (pair, dist)| {
+        if *dist > last_dist {
+            (*pair, *dist)
+        } else {
+            (last_pair, last_dist)
+        }
+    });
+    assert_eq!(3621, max_dist, "expect max dist");
+    assert!(pair == (2, 3) || pair == (3, 2), "expect pair is of two and three");
 }
 
 #[test]
@@ -1664,6 +1719,18 @@ impl ScannerSearch {
             collected.extend(scanners[i].points(Some(orient), Some(origin)));
         }
         collected
+    }
+
+    fn man_dists(scanners: &Vec<Scanner>, relatives: &Relatives) -> HashMap<(usize, usize), isize> {
+        let mut dists: HashMap<(usize, usize), isize> = HashMap::new();
+        for left in 0..scanners.len() {
+            let i_rels = relatives.as_root(left);
+            for right in 0..scanners.len() {
+                let ((x, y, z), _) = i_rels.trace(right);
+                dists.insert((left, right), x.abs() + y.abs() + z.abs());
+            }
+        }
+        dists
     }
 
     fn search_all(scanners: &Vec<Scanner>) -> Relatives {
