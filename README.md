@@ -16,6 +16,8 @@ My day 01 solution started in Java with Gradle because I started later in the da
 
 * Cmd+F binding is totally useless and frustrating in Firefox on iPad. Going to see if my copy-paste issues are also a Firefox-specific issue and not an issue on Safari.
 
+* Safari seems to reach a point where it crashes more and more often while scrolling in a complex source file.
+
 ## This is now a Rust project
 
 I needed a reason to try Rust, so I dropped Java after completing the day 01 solution and reimplemented it in rust. I tried generating tests using the VS Code features expecting the Rust extension to create something in the right place. That didn't work, so I copied the hello world example from some tutorial that had a test module right in main.rs, and I'm continuing to add 2 unit tests for each day without adding any non-test code. 
