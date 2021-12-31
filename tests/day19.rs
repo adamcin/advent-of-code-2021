@@ -23,10 +23,6 @@ fn read() -> Vec<Scanner> {
     return parse_scanners(&common::read_test_input("data/day-19/input.txt"));
 }
 
-fn read_tiny() -> Vec<Scanner> {
-    return parse_scanners(&common::read_test_input("data/day-19/input_tiny.txt"));
-}
-
 fn read_test() -> Vec<Scanner> {
     return parse_scanners(&common::read_test_input("data/day-19/input_test.txt"));
 }
@@ -326,35 +322,6 @@ impl Corner {
             if y < 0 { NegY } else { Y },
             if z < 0 { NegZ } else { Z },
         )
-    }
-
-    fn relpos_to_orient(&self, other: &Self, from: Option<Orient>) -> Orient {
-        let my_pos: CornerPosition = from.unwrap_or(Orient::default()).get_corner_position(self);
-        let orients = Orient::all();
-        return orients
-            .iter()
-            .filter(|orient| orient.get_corner(&my_pos) == *other)
-            .cloned()
-            .nth(0)
-            .unwrap();
-    }
-
-    fn rotation_to(&self, other: &Self) -> Rotation {
-        let orient = Orient::default();
-        return orient.rotation_to(&self.relpos_to_orient(other, Some(orient)));
-    }
-
-    fn all() -> Vec<Self> {
-        vec![
-            Corner::new(X, Y, Z),
-            Corner::new(X, Y, NegZ),
-            Corner::new(X, NegY, Z),
-            Corner::new(NegX, Y, Z),
-            Corner::new(NegX, Y, NegZ),
-            Corner::new(NegX, NegY, Z),
-            Corner::new(X, NegY, NegZ),
-            Corner::new(NegX, NegY, NegZ),
-        ]
     }
 
     /// (corner, inner bound)
@@ -1007,31 +974,6 @@ impl SubspaceCalc {
         )
             .into()
     }
-
-    fn _internal_compute_subspace_corner(
-        all_points: &Vec<Point>,
-        orient: &Orient,
-        corner: &Corner,
-    ) -> Vec<(SubspaceKey, Subspace)> {
-        let corner_subs: HashMap<Vec<Point>, (SubspaceKey, Subspace)> = corner
-            .iterate_from_corner(all_points)
-            .iter()
-            .flat_map(|vert| Subspace::select(12, &corner, &vert, all_points, &orient))
-            .map(|sub| (sub.points.to_owned(), (sub.get_key(), sub)))
-            .collect();
-        corner_subs.values().cloned().collect()
-    }
-
-    fn _internal_compute_subspace_origin(
-        scanner: &Scanner,
-        orient: &Orient,
-    ) -> Vec<(SubspaceKey, Subspace)> {
-        let all_points = scanner.points(Some(*orient), None);
-        Corner::all()
-            .iter()
-            .flat_map(|corner| Self::_internal_compute_subspace_corner(&all_points, orient, corner))
-            .collect()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1045,45 +987,6 @@ struct Subspace {
 }
 
 impl Subspace {
-    fn new(corner: &Corner, points: &Vec<Point>, orient: &Orient) -> Self {
-        let vert = (
-            if corner.x.is_neg() {
-                all_xs(points).iter().fold(SCAN_MIN, |a, x| max(a, *x))
-            } else {
-                all_xs(points).iter().fold(SCAN_MAX, |a, x| min(a, *x))
-            },
-            if corner.y.is_neg() {
-                all_ys(points).iter().fold(SCAN_MIN, |a, y| max(a, *y))
-            } else {
-                all_ys(points).iter().fold(SCAN_MAX, |a, y| min(a, *y))
-            },
-            if corner.z.is_neg() {
-                all_zs(points).iter().fold(SCAN_MIN, |a, z| max(a, *z))
-            } else {
-                all_zs(points).iter().fold(SCAN_MAX, |a, z| min(a, *z))
-            },
-        );
-        let mut sub = Self {
-            corner: *corner,
-            orient: *orient,
-            vert: vert,
-            points: points.to_owned(),
-            dists_ext: Vec::new(),
-            dists_int: Vec::new(),
-        };
-
-        sub.dists_int = sub.dists_internal();
-        sub.dists_ext = sub.dists_external();
-        sub
-    }
-
-    fn get_key(&self) -> SubspaceKey {
-        SubspaceKey {
-            orient: self.orient,
-            corner: self.corner,
-            dists_ext: self.dists_ext.to_owned(),
-        }
-    }
 
     fn copy(&self) -> Self {
         Self {
@@ -1093,35 +996,6 @@ impl Subspace {
             points: self.points.to_owned(),
             dists_ext: self.dists_ext.to_owned(),
             dists_int: self.dists_int.to_owned(),
-        }
-    }
-
-    fn rotate(&self, rotation: &Rotation) -> Self {
-        Self::new(
-            &self.corner.rotate(rotation),
-            &transform_points(&self.points, &rotation.to_matrices()),
-            &self.orient,
-        )
-    }
-
-    fn select(
-        min: usize,
-        corner: &Corner,
-        vert: &Point,
-        points: &Vec<Point>,
-        orient: &Orient,
-    ) -> Option<Subspace> {
-        let cpoint = corner.to_point(None);
-        let mut subpoints: Vec<Point> = points
-            .iter()
-            .filter(|test| filter_box(&cpoint, vert, test))
-            .cloned()
-            .collect();
-        if subpoints.len() >= min {
-            subpoints.sort();
-            Some(Subspace::new(corner, &subpoints, orient))
-        } else {
-            None
         }
     }
 
@@ -1584,14 +1458,12 @@ fn day19_test_scanner_search_all() {
 #[test]
 fn day19_test_trace_relativity() {
     let hop1: Relativity = ((68, -1246, -43).into(), Orient::new(NegZ, Y));
-    let (one_origin, one_orient) = Relatives::trace_relativity(&[hop1]);
+    let (one_origin, _) = Relatives::trace_relativity(&[hop1]);
     assert_eq!((68, -1246, -43), one_origin, "expect one origin hop");
 
-    let scanned = (64, -44, -1237);
-    let correction = (24, 157, 133);
     let corrected = (88, 113, -1104);
     let hop2: Relativity = (corrected.into(), Orient::new(Z, NegY));
-    let (last_origin, last_orient) = Relatives::trace_relativity(&[hop1, hop2]);
+    let (last_origin, _) = Relatives::trace_relativity(&[hop1, hop2]);
 
     assert_eq!((-20, -1133, 1061), last_origin, "expect last origin");
 }
@@ -1778,27 +1650,6 @@ impl ScannerSearch {
             .map(|calc| calc.new_subspace(&key.orient))
     }
 
-    fn corner_point(&self, corner: &Corner) -> Point {
-        let (ox, oy, oz) = (0, 0, 0);
-        (
-            ox + if corner.x.is_neg() {
-                SCAN_MIN
-            } else {
-                SCAN_MAX
-            },
-            oy + if corner.y.is_neg() {
-                SCAN_MIN
-            } else {
-                SCAN_MAX
-            },
-            oy + if corner.z.is_neg() {
-                SCAN_MIN
-            } else {
-                SCAN_MAX
-            },
-        )
-    }
-
     fn lookup_calc<'s>(&'s self, calc_key: &SubspaceCalcKey) -> Option<&'s SubspaceCalc> {
         self.calc_storage
             .get(&calc_key.position)
@@ -1834,25 +1685,6 @@ impl ScannerSearch {
             }
         }
         None
-    }
-
-    fn all_intersects(&self, other: &mut ScannerSearch) -> Vec<((Subspace, Subspace), Relativity)> {
-        self.get_default_subspaces()
-            .iter()
-            .flat_map(|lsub| -> Vec<_> {
-                Orient::all()
-                    .iter()
-                    .flat_map(|rorient| {
-                        let rkey = SubspaceKey {
-                            orient: *rorient,
-                            corner: lsub.corner.invert(),
-                            dists_ext: lsub.dists_internal(),
-                        };
-                        other.compare_subspace(&rkey, &lsub)
-                    })
-                    .collect()
-            })
-            .collect()
     }
 
     fn intersects(&self, other: &ScannerSearch) -> Option<((Subspace, Subspace), Relativity)> {
@@ -1899,11 +1731,6 @@ fn dist(from: &Point, to: &Point) -> isize {
 fn dist_dims_raw(from: &Point, to: &Point) -> Point {
     let ((from_x, from_y, from_z), (to_x, to_y, to_z)) = (from, to);
     (to_x - from_x, to_y - from_y, to_z - from_z)
-}
-
-fn dist_dims_raw_to_abs(dist_dims: &(isize, isize, isize)) -> (isize, isize, isize) {
-    let (dx, dy, dz) = *dist_dims;
-    return (dx.abs(), dy.abs(), dz.abs());
 }
 
 /// translation matrix:
@@ -1995,18 +1822,6 @@ fn relativity_to_string(relativity: &Relativity) -> String {
     format!("({}, {})", ping.to_string(), orient.to_string())
 }
 
-fn origin_relative_translation(trans: &(Point, Point), origin: Option<Point>) -> Point {
-    return (
-        origin.unwrap_or((0, 0, 0)),
-        dist_dims_raw(&trans.0, &trans.1),
-    )
-        .1;
-}
-
-fn to_translation_from_origin(trans: &(Point, Point)) -> (Point, Point) {
-    return ((0, 0, 0), dist_dims_raw(&trans.0, &trans.1));
-}
-
 fn _transform_point(point: &Point, transform: &Array2<isize>) -> Point {
     // let do_log = *point == (-618, -824, -621) || *point == (686, 422, 578);
     // if do_log {
@@ -2024,14 +1839,6 @@ fn transform_point(point: &Point, transform: &Vec<Array2<isize>>) -> Point {
         point,
         &transform.iter().fold(t_identity(), |acc, t| acc.dot(t)),
     );
-}
-
-fn transform_points(points: &Vec<Point>, transform: &Vec<Array2<isize>>) -> Vec<Point> {
-    let tx = &transform.iter().fold(t_identity(), |acc, t| acc.dot(t));
-    return points
-        .iter()
-        .map(|point| _transform_point(point, tx))
-        .collect();
 }
 
 fn all_xs(points: &Vec<Point>) -> Vec<isize> {

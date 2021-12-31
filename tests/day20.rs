@@ -2,7 +2,7 @@ mod common;
 
 fn read() -> (Algo, Image) {
 
-    for (i, line) in common::read_test_input("data/day-19/input.txt").iter().enumerate() {
+    for (i, line) in common::read_test_input("data/day-20/input.txt").iter().enumerate() {
         if i == 0 {
 
         }
