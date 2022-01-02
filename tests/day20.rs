@@ -1,6 +1,4 @@
 mod common;
-use ndarray::arr2;
-use ndarray::Array2;
 
 fn read() -> (Algo, Image) {
     parse_input(common::read_test_input("data/day-20/input.txt")).unwrap()
@@ -124,7 +122,8 @@ impl Image {
         }
         Self {
             res: new_res,
-            uni_lit: (self.uni_lit && algo.is_lit(MAX_PIXELS_IN)) || (!self.uni_lit && algo.is_lit(0)),
+            uni_lit: (self.uni_lit && algo.is_lit(MAX_PIXELS_IN))
+                || (!self.uni_lit && algo.is_lit(0)),
             data: new_data,
         }
     }
@@ -169,22 +168,42 @@ impl Image {
         return new_value;
     }
 
-    /// 000111
-    /// 000111
-    /// 00...1
-    /// 22...3
-    /// 22...3
-    /// 222333
+    /// This is the key for computing the solution directly from sparse
+    /// data.
+    /// 
+    /// Because each iteration of an image increases the defined resolution by two, one
+    /// unit in each direction, and because we always align the sparse data matrix origin 
+    /// to the extreme upper left of its image, the sparse data matrix of the next image 
+    /// always starts one pixel up and one pixel left relative to the current image matrix.
+    /// 
+    /// And since every sparse data cell in the next image requires a 5x5 square of input 
+    /// pixels to calculate all of its 3x3 output pixels, we can provide that input data 
+    /// from just 4 sparse data values in the current image.
+    /// 
+    /// 0|0|0||1|1|1
+    /// -+-+-++-+-+-
+    /// 0|0|0||1|1|1
+    /// -+-+-++-+-+-
+    /// 0|0| || | |1
+    /// =‡=‡=‡‡=‡=‡=
+    /// 2|2| || | |3
+    /// -+-+-++-+-+-
+    /// 2|2| || | |3
+    /// -+-+-++-+-+-
+    /// 2|2|2||3|3|3
     ///
-    /// 0 <- key[0](4,5,7,8) + key[1](3,6) + key[2](1,2) + key[3](0)
-    /// 1 <- key[0](5,8) + key[1](3,4,6,7) + key[2](2) + key[3](0,1)
-    /// 2 <- key[0]() + key[1](3,4,5,6,7,8) + key[2]() + key[3](0,1,2)
-    /// 3 <- key[0](7,8) + key[1](6) + key[2](1,2,4,5) + key[3](0,3)
-    /// 4 <- key[0](8) + key[1](6,7) + key[2](2,5) + key[3](0,1,3,4)
-    /// 5 <- key[0]() + key[1](6,7,8) + key[2]() + key[3](0,1,2,3,4,5)
-    /// 6 <- key[0]() + key[1]() + key[2](1,2,4,5,7,8) + key[3](0,3,6)
-    /// 7 <- key[0]() + key[1]() + key[2](2,5,8) + key[3](0,1,3,4,6,7)
-    /// 8 <- key[3]
+    /// The normal case for this is to provide a 4-element array of values from the 
+    /// current data. 
+    /// 
+    ///   [ 
+    ///     (row-1, col-1), (row-1, col),
+    ///     (row,   col-1), (row,   col)
+    ///   ]
+    /// 
+    /// The edge cases consist of all the values on the edge of the current image.
+    /// The current image data may not have stored all the values needed for the next
+    /// image, so for each cell past the edge, the correct default of zero or MAX_PIXELS_IN
+    /// must be provided in its place.
     fn data_key(&self, data_pos: &Pos) -> DataKey {
         let (row, col) = *data_pos;
         let def_val = if self.uni_lit {
@@ -210,7 +229,7 @@ impl Image {
     }
 
     fn res_padding(res: usize) -> usize {
-        ((3 - (res % 3)) % 3) + 6
+        (3 - (res % 3)) % 3
     }
 
     fn parse(lines: &[String]) -> Option<Self> {
@@ -317,6 +336,39 @@ struct DataKey {
     arr: DataKeyArr,
 }
 
+/// 0|0|0||1|1|1
+/// -+-+-++-+-+-
+/// 0|0|0||1|1|1
+/// -+-+-++-+-+-
+/// 0|0| || | |1
+/// =‡=‡=‡‡=‡=‡=
+/// 2|2| || | |3
+/// -+-+-++-+-+-
+/// 2|2| || | |3
+/// -+-+-++-+-+-
+/// 2|2|2||3|3|3
+///
+/// 0 <- key[0](4,5,7,8) + key[1](3,6) + key[2](1,2) + key[3](0)
+/// 1 <- key[0](5,8) + key[1](3,4,6,7) + key[2](2) + key[3](0,1)
+/// 2 <- key[0]() + key[1](3,4,5,6,7,8) + key[2]() + key[3](0,1,2)
+/// 3 <- key[0](7,8) + key[1](6) + key[2](1,2,4,5) + key[3](0,3)
+/// 4 <- key[0](8) + key[1](6,7) + key[2](2,5) + key[3](0,1,3,4)
+/// 5 <- key[0]() + key[1](6,7,8) + key[2]() + key[3](0,1,2,3,4,5)
+/// 6 <- key[0]() + key[1]() + key[2](1,2,4,5,7,8) + key[3](0,3,6)
+/// 7 <- key[0]() + key[1]() + key[2](2,5,8) + key[3](0,1,3,4,6,7)
+/// 8 <- key[3]
+///
+///   04,05,13  05,13,14  13,14,15
+///   07,08,16  08,16,17  16,17,18
+///   21,22,30  22,30,31  30,31,32
+///
+///   07,08,16  08,16,17  16,17,18
+///   21,22,30  22,30,31  30,31,32
+///   24,25,33  25,33,34  33,34,35
+///
+///   21,22,30  22,30,31  30,31,32
+///   24,25,33  25,33,34  33,34,35
+///   27,28,36  28,36,37  36,37,38
 impl DataKey {
     fn algo_input_p0(&self) -> u16 {
         self.algo_input_by_mask(&Self::P0)
@@ -537,35 +589,7 @@ impl DataKeyMappings for DataKey {
     ];
 }
 
-/// 000111
-/// 000111
-/// 00...1
-/// 22...3
-/// 22...3
-/// 222333
-///
-///
-/// 0 <- key[0](4,5,7,8) + key[1](3,6) + key[2](1,2) + key[3](0)
-/// 1 <- key[0](5,8) + key[1](3,4,6,7) + key[2](2) + key[3](0,1)
-/// 2 <- key[0]() + key[1](3,4,5,6,7,8) + key[2]() + key[3](0,1,2)
-/// 3 <- key[0](7,8) + key[1](6) + key[2](1,2,4,5) + key[3](0,3)
-/// 4 <- key[0](8) + key[1](6,7) + key[2](2,5) + key[3](0,1,3,4)
-/// 5 <- key[0]() + key[1](6,7,8) + key[2]() + key[3](0,1,2,3,4,5)
-/// 6 <- key[0]() + key[1]() + key[2](1,2,4,5,7,8) + key[3](0,3,6)
-/// 7 <- key[0]() + key[1]() + key[2](2,5,8) + key[3](0,1,3,4,6,7)
-/// 8 <- key[3]
-///
-///   04,05,13  05,13,14  13,14,15
-///   07,08,16  08,16,17  16,17,18
-///   21,22,30  22,30,31  30,31,32
-///
-///   07,08,16  08,16,17  16,17,18
-///   21,22,30  22,30,31  30,31,32
-///   24,25,33  25,33,34  33,34,35
-///
-///   21,22,30  22,30,31  30,31,32
-///   24,25,33  25,33,34  33,34,35
-///   27,28,36  28,36,37  36,37,38
+
 #[test]
 fn day20_test_data_key() {
     let zeros = DataKey::new(&[0; 4]).algo_inputs();
@@ -615,9 +639,7 @@ fn day20_test_image_next_odd() {
 fn day20_test_image_next_even() {
     let algo = checker_algo();
 
-    let image = Image::parse(&[
-        "#.".to_owned(), 
-        ".#".to_owned()]).unwrap();
+    let image = Image::parse(&["#.".to_owned(), ".#".to_owned()]).unwrap();
     println!("image0:\n{}", image.to_string());
     let image1 = image.next(&algo);
     println!("image1:\n{}", image1.to_string());
@@ -743,13 +765,13 @@ fn day20part1() {
 #[test]
 fn day20pre_part2() {
     let (algo, image) = read_test();
-    let final_image = (0..50).fold(image, |a,v| a.next(&algo));
+    let final_image = (0..50).fold(image, |a, _| a.next(&algo));
     assert_eq!(3351, final_image.count_lit());
 }
 
 #[test]
 fn day20part2() {
     let (algo, image) = read();
-    let final_image = (0..50).fold(image, |a,v| a.next(&algo));
+    let final_image = (0..50).fold(image, |a, _| a.next(&algo));
     assert_eq!(19743, final_image.count_lit());
 }
