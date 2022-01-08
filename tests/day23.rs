@@ -386,12 +386,106 @@ impl PosPaths {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Room {
+    half: bool,
+    dest: Pod,
+    pods: [Option<Pod>; 4],
+}
+
+impl Room {
+    fn new(half: bool, dest: Pod, pods: [Option<Pod>; 4]) -> Self {
+        Self {
+            half: half,
+            dest: dest,
+            pods: pods,
+        }
+    }
+
+    fn inner_pos(&self) -> Pos {
+        match self.dest {
+            A => Ga0,
+            B => Gb0,
+            C => Gc0,
+            D => Gd0,
+        }
+    }
+
+    fn pos_at_depth(&self, depth: usize) -> Pos {
+        self.inner_pos().for_depth(depth)
+    }
+
+    fn take_depth(&self) -> usize {
+        if self.half {
+            2
+        } else {
+            4
+        }
+    }
+
+    fn is_complete(&self) -> bool {
+        self.pods.iter().take(self.take_depth()).fold(true, |a, v| {
+            a && v.map(|pod| pod == self.dest).unwrap_or(false)
+        })
+    }
+
+    fn non_dest_pods(&self) -> Vec<(Pos, Pod)> {
+        self.to_places()
+            .iter()
+            .filter(|(_, pod)| *pod != self.dest)
+            .cloned()
+            .collect()
+    }
+
+    fn next_evicting(&self) -> Option<(Pos, Pod)> {
+        self.non_dest_pods().get(0).cloned()
+    }
+
+    fn next_accepting(&self) -> Option<Pos> {
+        if self.non_dest_pods().is_empty() {
+            self.pods
+                .iter()
+                .take(self.take_depth())
+                .enumerate()
+                .rev()
+                .filter_map(|(i, pod)| {
+                    if pod.is_none() {
+                        Some(self.pos_at_depth(i))
+                    } else {
+                        None
+                    }
+                })
+                .nth(0)
+        } else {
+            None
+        }
+    }
+
+    fn to_places(&self) -> Vec<(Pos, Pod)> {
+        self.pods
+            .iter()
+            .take(self.take_depth())
+            .enumerate()
+            .filter_map(|(i, cell)| cell.map(|pod| (self.pos_at_depth(i), pod)))
+            .collect()
+    }
+}
+
+use std::ops::Index;
+impl Index<usize> for Room {
+    type Output = Option<Pod>;
+
+    fn index(&self, depth: usize) -> &Self::Output {
+        &self.pods[depth]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct State {
     half: bool,
-    ga: [Option<Pod>; 4],
-    gb: [Option<Pod>; 4],
-    gc: [Option<Pod>; 4],
-    gd: [Option<Pod>; 4],
+    ga: Room,
+    gb: Room,
+    gc: Room,
+    gd: Room,
     hab: Option<Pod>,
     hbc: Option<Pod>,
     hcd: Option<Pod>,
@@ -401,37 +495,53 @@ struct State {
     ro: Option<Pod>,
 }
 
-const ROOM_SEARCH_ORDER: [Pod; 4] = [B, C, D, A];
+const ROOM_SEARCH_ORDER: [Pod; 4] = [A, B, C, D];
 
 impl State {
     fn new(half: bool, places: Vec<(Pos, Pod)>) -> Self {
         let mut place_map: HashMap<Pos, Pod> = HashMap::from_iter(places.into_iter());
         Self {
             half: half,
-            ga: [
-                place_map.remove(&Ga0),
-                place_map.remove(&Ga1),
-                place_map.remove(&Ga2),
-                place_map.remove(&Ga3),
-            ],
-            gb: [
-                place_map.remove(&Gb0),
-                place_map.remove(&Gb1),
-                place_map.remove(&Gb2),
-                place_map.remove(&Gb3),
-            ],
-            gc: [
-                place_map.remove(&Gc0),
-                place_map.remove(&Gc1),
-                place_map.remove(&Gc2),
-                place_map.remove(&Gc3),
-            ],
-            gd: [
-                place_map.remove(&Gd0),
-                place_map.remove(&Gd1),
-                place_map.remove(&Gd2),
-                place_map.remove(&Gd3),
-            ],
+            ga: Room::new(
+                half,
+                A,
+                [
+                    place_map.remove(&Ga0),
+                    place_map.remove(&Ga1),
+                    place_map.remove(&Ga2),
+                    place_map.remove(&Ga3),
+                ],
+            ),
+            gb: Room::new(
+                half,
+                B,
+                [
+                    place_map.remove(&Gb0),
+                    place_map.remove(&Gb1),
+                    place_map.remove(&Gb2),
+                    place_map.remove(&Gb3),
+                ],
+            ),
+            gc: Room::new(
+                half,
+                C,
+                [
+                    place_map.remove(&Gc0),
+                    place_map.remove(&Gc1),
+                    place_map.remove(&Gc2),
+                    place_map.remove(&Gc3),
+                ],
+            ),
+            gd: Room::new(
+                half,
+                D,
+                [
+                    place_map.remove(&Gd0),
+                    place_map.remove(&Gd1),
+                    place_map.remove(&Gd2),
+                    place_map.remove(&Gd3),
+                ],
+            ),
             hab: place_map.remove(&Hab),
             hbc: place_map.remove(&Hbc),
             hcd: place_map.remove(&Hcd),
@@ -444,50 +554,10 @@ impl State {
 
     fn to_places(&self) -> Vec<(Pos, Pod)> {
         vec![
-            self.ga
-                .iter()
-                .enumerate()
-                .filter_map(|(i, cell)| match i {
-                    0 => cell.map(|pod| (Ga0, pod)),
-                    1 => cell.map(|pod| (Ga1, pod)),
-                    2 => cell.map(|pod| (Ga2, pod)),
-                    3 => cell.map(|pod| (Ga3, pod)),
-                    _ => None,
-                })
-                .collect::<Vec<_>>(),
-            self.gb
-                .iter()
-                .enumerate()
-                .filter_map(|(i, cell)| match i {
-                    0 => cell.map(|pod| (Gb0, pod)),
-                    1 => cell.map(|pod| (Gb1, pod)),
-                    2 => cell.map(|pod| (Gb2, pod)),
-                    3 => cell.map(|pod| (Gb3, pod)),
-                    _ => None,
-                })
-                .collect::<Vec<_>>(),
-            self.gc
-                .iter()
-                .enumerate()
-                .filter_map(|(i, cell)| match i {
-                    0 => cell.map(|pod| (Gc0, pod)),
-                    1 => cell.map(|pod| (Gc1, pod)),
-                    2 => cell.map(|pod| (Gc2, pod)),
-                    3 => cell.map(|pod| (Gc3, pod)),
-                    _ => None,
-                })
-                .collect::<Vec<_>>(),
-            self.gd
-                .iter()
-                .enumerate()
-                .filter_map(|(i, cell)| match i {
-                    0 => cell.map(|pod| (Gd0, pod)),
-                    1 => cell.map(|pod| (Gd1, pod)),
-                    2 => cell.map(|pod| (Gd2, pod)),
-                    3 => cell.map(|pod| (Gd3, pod)),
-                    _ => None,
-                })
-                .collect::<Vec<_>>(),
+            self.ga.to_places(),
+            self.gb.to_places(),
+            self.gc.to_places(),
+            self.gd.to_places(),
             [
                 self.hab.map(|pod| (Hab, pod)),
                 self.hbc.map(|pod| (Hbc, pod)),
@@ -518,31 +588,10 @@ impl State {
     }
 
     fn is_complete(&self) -> bool {
-        if self.half {
-            match (
-                self.ga[0], self.ga[1], self.gb[0], self.gb[1], self.gc[0], self.gc[1], self.gd[0],
-                self.gd[1],
-            ) {
-                (Some(A), Some(A), Some(B), Some(B), Some(C), Some(C), Some(D), Some(D)) => true,
-                _ => false,
-            }
-        } else {
-            self.ga
-                .iter()
-                .fold(true, |a, v| a && v.map(|pod| pod == A).unwrap_or(false))
-                && self
-                    .gb
-                    .iter()
-                    .fold(true, |a, v| a && v.map(|pod| pod == B).unwrap_or(false))
-                && self
-                    .gc
-                    .iter()
-                    .fold(true, |a, v| a && v.map(|pod| pod == C).unwrap_or(false))
-                && self
-                    .gd
-                    .iter()
-                    .fold(true, |a, v| a && v.map(|pod| pod == D).unwrap_or(false))
-        }
+        self.ga.is_complete()
+            && self.gb.is_complete()
+            && self.gc.is_complete()
+            && self.gd.is_complete()
     }
 
     fn at_pos(&self, pos: &Pos, pod: &Pod) -> bool {
@@ -638,44 +687,14 @@ impl State {
             + (D.energy() * min_steps_d)
     }
 
-    fn rooms_completed(&self) -> Vec<Pod> {
-        ROOM_SEARCH_ORDER
-            .iter()
-            .filter(|pod| match *pod {
-                A => self.at_pos(&Ga0, pod) && self.at_pos(&Ga1, pod),
-                B => self.at_pos(&Gb0, pod) && self.at_pos(&Gb1, pod),
-                C => self.at_pos(&Gc0, pod) && self.at_pos(&Gc1, pod),
-                D => self.at_pos(&Gd0, pod) && self.at_pos(&Gd1, pod),
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-
     fn rooms_accepting(&self) -> Vec<Pos> {
         ROOM_SEARCH_ORDER
             .iter()
             .filter_map(|pod| match *pod {
-                A => match (self.get_pos(&Ga0), self.get_pos(&Ga1)) {
-                    (None, None) => Some(Ga1),
-                    (None, Some(A)) => Some(Ga0),
-                    _ => None,
-                },
-                B => match (self.get_pos(&Gb0), self.get_pos(&Gb1)) {
-                    (None, None) => Some(Gb1),
-                    (None, Some(B)) => Some(Gb0),
-                    _ => None,
-                },
-                C => match (self.get_pos(&Gc0), self.get_pos(&Gc1)) {
-                    (None, None) => Some(Gc1),
-                    (None, Some(C)) => Some(Gc0),
-                    _ => None,
-                },
-                D => match (self.get_pos(&Gd0), self.get_pos(&Gd1)) {
-                    (None, None) => Some(Gd1),
-                    (None, Some(D)) => Some(Gd0),
-                    _ => None,
-                },
+                A => self.ga.next_accepting(),
+                B => self.gb.next_accepting(),
+                C => self.gc.next_accepting(),
+                D => self.gd.next_accepting(),
                 _ => None,
             })
             .collect()
@@ -722,26 +741,10 @@ impl State {
         ROOM_SEARCH_ORDER
             .iter()
             .filter_map(|pod| match *pod {
-                A => match (self.get_pos(&Ga0), self.get_pos(&Ga1)) {
-                    (None, None) | (None, Some(A)) | (Some(A), Some(A)) | (Some(A), None) => None,
-                    (Some(epod), _) => Some((Ga0, epod)),
-                    (None, Some(epod)) => Some((Ga1, epod)),
-                },
-                B => match (self.get_pos(&Gb0), self.get_pos(&Gb1)) {
-                    (None, None) | (None, Some(B)) | (Some(B), Some(B)) | (Some(B), None) => None,
-                    (Some(epod), _) => Some((Gb0, epod)),
-                    (None, Some(epod)) => Some((Gb1, epod)),
-                },
-                C => match (self.get_pos(&Gc0), self.get_pos(&Gc1)) {
-                    (None, None) | (None, Some(C)) | (Some(C), Some(C)) | (Some(C), None) => None,
-                    (Some(epod), _) => Some((Gc0, epod)),
-                    (None, Some(epod)) => Some((Gc1, epod)),
-                },
-                D => match (self.get_pos(&Gd0), self.get_pos(&Gd1)) {
-                    (None, None) | (None, Some(D)) | (Some(D), Some(D)) | (Some(D), None) => None,
-                    (Some(epod), _) => Some((Gd0, epod)),
-                    (None, Some(epod)) => Some((Gd1, epod)),
-                },
+                A => self.ga.next_evicting(),
+                B => self.gb.next_evicting(),
+                C => self.gc.next_evicting(),
+                D => self.gd.next_evicting(),
                 _ => None,
             })
             .collect()
@@ -1098,7 +1101,7 @@ fn day23pre_part1() {
 }
 
 #[test]
-fn day23part1() {
+fn day23manual_part1() {
     let bur = read(true);
     /// #############
     /// #...........#
@@ -1166,7 +1169,7 @@ fn day23part1() {
 ///   #########
 ///
 #[test]
-fn day23part2() {
+fn day23manual_part2() {
     let bur = read(false);
     let ad0_wait = Lo;
     let ad1_wait = Li;
@@ -1201,7 +1204,6 @@ fn day23part2() {
         (bc1_wait, Gb1),
         (bd3_wait, Gb0),
         (cd2_wait1, Gc0),
-        
         // (Gb2, Hab),
         // (Gb3, Gc0),
         // (Hab, Gb3),
