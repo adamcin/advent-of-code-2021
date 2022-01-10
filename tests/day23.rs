@@ -61,18 +61,9 @@ enum Pod {
 use Pod::*;
 impl Pod {
     fn is_dest(&self, pos: &Pos) -> bool {
-        match (self, pos) {
-            (A, Ga0)
-            | (A, Ga1)
-            | (B, Gb0)
-            | (B, Gb1)
-            | (C, Gc0)
-            | (C, Gc1)
-            | (D, Gd0)
-            | (D, Gd1) => true,
-            _ => false,
-        }
+        pos.goal_for_pod().map(|pod| pod == *self).unwrap_or(false)
     }
+
     fn energy(&self) -> usize {
         match self {
             A => 1,
@@ -250,18 +241,18 @@ impl Pos {
 
     fn get_inner_hall(&self) -> Option<Self> {
         match self {
-            Ga0 => Some(Ha),
-            Gb0 => Some(Hb),
-            Gc0 => Some(Hc),
-            Gd0 => Some(Hd),
+            Ga0 | Ga1 | Ga2 | Ga3 => Some(Ha),
+            Gb0 | Gb1 | Gb2 | Gb3 => Some(Hb),
+            Gc0 | Gc1 | Gc2 | Gc3 => Some(Hc),
+            Gd0 | Gd1 | Gd2 | Gd3 => Some(Hd),
             _ => None,
         }
     }
 
     fn get_nearest_inner_hall(&self) -> Option<Self> {
         match self {
-            Li => Some(Ha),
-            Ri => Some(Hd),
+            Lo | Li => Some(Ha),
+            Ro | Ri => Some(Hd),
             _ => self.get_inner_hall(),
         }
     }
@@ -385,7 +376,7 @@ impl PosPaths {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 struct Room {
     half: bool,
     dest: Pod,
@@ -436,25 +427,61 @@ impl Room {
             .collect()
     }
 
+    fn obscurity(&self, pod: &Pod) -> usize {
+        let mut obscurity = 0;
+        let mut obscuring: Vec<usize> = Vec::new();
+        for maybe_pod in self.pods {
+            if let Some(opod) = maybe_pod {
+                if *pod == opod {
+                    let add_obscurity = obscuring.iter().fold(0, |a, v| a + v);
+                    obscurity = obscurity + add_obscurity;
+                    obscuring = Vec::new();
+                } else {
+                    obscuring.push(opod.energy());
+                }
+            }
+        }
+        obscurity
+    }
+
+    fn deepest_dest(&self, max_depth: usize) -> Option<(Pos, Pod)> {
+        self.pods
+            .iter()
+            .enumerate()
+            .take(std::cmp::min(self.take_depth(), max_depth))
+            .rev()
+            .filter_map(|(i, cell)| {
+                cell.filter(|pod| *pod == self.dest)
+                    .map(|pod| (self.pos_at_depth(i), pod))
+            })
+            .nth(0)
+    }
+
+    fn empty_depth(&self) -> Option<usize> {
+        self.pods
+            .iter()
+            .enumerate()
+            .take(self.take_depth())
+            .rev()
+            .filter_map(|(i, cell)| if cell.is_none() { Some(i) } else { None })
+            .nth(0)
+    }
+
     fn next_evicting(&self) -> Option<(Pos, Pod)> {
-        self.non_dest_pods().get(0).cloned()
+        if !self.non_dest_pods().is_empty() {
+            self.pods
+                .iter()
+                .enumerate()
+                .filter_map(|(i, mpod)| mpod.map(|pod| (self.pos_at_depth(i), pod)))
+                .nth(0)
+        } else {
+            self.empty_depth().and_then(|ed| self.deepest_dest(ed))
+        }
     }
 
     fn next_accepting(&self) -> Option<Pos> {
         if self.non_dest_pods().is_empty() {
-            self.pods
-                .iter()
-                .take(self.take_depth())
-                .enumerate()
-                .rev()
-                .filter_map(|(i, pod)| {
-                    if pod.is_none() {
-                        Some(self.pos_at_depth(i))
-                    } else {
-                        None
-                    }
-                })
-                .nth(0)
+            self.empty_depth().map(|d| self.pos_at_depth(d))
         } else {
             None
         }
@@ -463,8 +490,8 @@ impl Room {
     fn to_places(&self) -> Vec<(Pos, Pod)> {
         self.pods
             .iter()
-            .take(self.take_depth())
             .enumerate()
+            .take(self.take_depth())
             .filter_map(|(i, cell)| cell.map(|pod| (self.pos_at_depth(i), pod)))
             .collect()
     }
@@ -494,8 +521,6 @@ struct State {
     ri: Option<Pod>,
     ro: Option<Pod>,
 }
-
-const ROOM_SEARCH_ORDER: [Pod; 4] = [A, B, C, D];
 
 impl State {
     fn new(half: bool, places: Vec<(Pos, Pod)>) -> Self {
@@ -576,10 +601,12 @@ impl State {
 
     fn is_valid(&self) -> bool {
         let places = self.to_places();
+        let count = if self.half { 2 } else { 4 };
         for ipod in [A, B, C, D] {
-            if 2 != places
-                .iter()
-                .fold(0, |a, (_, pod)| if *pod == ipod { a + 1 } else { a })
+            if count
+                != places
+                    .iter()
+                    .fold(0, |a, (_, pod)| if *pod == ipod { a + 1 } else { a })
             {
                 return false;
             }
@@ -622,82 +649,16 @@ impl State {
             .collect()
     }
 
-    fn min_energy_to_complete(&self) -> usize {
-        let places = self.to_places();
-        let min_steps_a = if let [a_pos1, a_pos2] = &(places
-            .iter()
-            .filter_map(|(pos, pod)| if *pod == A { Some(*pos) } else { None })
-            .collect::<Vec<_>>())[0..]
-        {
-            std::cmp::min(
-                a_pos1.path_to(&Ga0).map(|path| path.len()).unwrap_or(0)
-                    + a_pos2.path_to(&Ga1).map(|path| path.len()).unwrap_or(0),
-                a_pos2.path_to(&Ga0).map(|path| path.len()).unwrap_or(0)
-                    + a_pos1.path_to(&Ga1).map(|path| path.len()).unwrap_or(0),
-            )
-        } else {
-            0
-        };
-        let min_steps_b = if let [b_pos1, b_pos2] = &(places
-            .iter()
-            .filter_map(|(pos, pod)| if *pod == B { Some(*pos) } else { None })
-            .collect::<Vec<_>>())[0..]
-        {
-            std::cmp::min(
-                b_pos1.path_to(&Gb0).map(|path| path.len()).unwrap_or(0)
-                    + b_pos2.path_to(&Gb1).map(|path| path.len()).unwrap_or(0),
-                b_pos2.path_to(&Gb0).map(|path| path.len()).unwrap_or(0)
-                    + b_pos1.path_to(&Gb1).map(|path| path.len()).unwrap_or(0),
-            )
-        } else {
-            0
-        };
-        let min_steps_c = if let [c_pos1, c_pos2] = &(places
-            .iter()
-            .filter_map(|(pos, pod)| if *pod == C { Some(*pos) } else { None })
-            .collect::<Vec<_>>())[0..]
-        {
-            std::cmp::min(
-                c_pos1.path_to(&Gc0).map(|path| path.len()).unwrap_or(0)
-                    + c_pos2.path_to(&Gc1).map(|path| path.len()).unwrap_or(0),
-                c_pos2.path_to(&Gc0).map(|path| path.len()).unwrap_or(0)
-                    + c_pos1.path_to(&Gc1).map(|path| path.len()).unwrap_or(0),
-            )
-        } else {
-            0
-        };
-        let min_steps_d = if let [d_pos1, d_pos2] = &(places
-            .iter()
-            .filter_map(|(pos, pod)| if *pod == D { Some(*pos) } else { None })
-            .collect::<Vec<_>>())[0..]
-        {
-            std::cmp::min(
-                d_pos1.path_to(&Gd0).map(|path| path.len()).unwrap_or(0)
-                    + d_pos2.path_to(&Gd1).map(|path| path.len()).unwrap_or(0),
-                d_pos2.path_to(&Gd0).map(|path| path.len()).unwrap_or(0)
-                    + d_pos1.path_to(&Gd1).map(|path| path.len()).unwrap_or(0),
-            )
-        } else {
-            0
-        };
-
-        (A.energy() * min_steps_a)
-            + (B.energy() * min_steps_b)
-            + (C.energy() * min_steps_c)
-            + (D.energy() * min_steps_d)
-    }
-
     fn rooms_accepting(&self) -> Vec<Pos> {
-        ROOM_SEARCH_ORDER
-            .iter()
-            .filter_map(|pod| match *pod {
-                A => self.ga.next_accepting(),
-                B => self.gb.next_accepting(),
-                C => self.gc.next_accepting(),
-                D => self.gd.next_accepting(),
-                _ => None,
-            })
-            .collect()
+        vec![
+            self.ga.next_accepting(),
+            self.gb.next_accepting(),
+            self.gc.next_accepting(),
+            self.gd.next_accepting(),
+        ]
+        .iter()
+        .filter_map(|e| *e)
+        .collect()
     }
 
     fn are_empty(&self, poss: &[Pos]) -> bool {
@@ -707,7 +668,7 @@ impl State {
     }
 
     fn halls_accepting(&self, room: &Pos) -> Vec<Pos> {
-        match room.as_inner().get_inner_hall() {
+        match room.get_inner_hall() {
             Some(inner_hall) => [Lo, Li, Hab, Hbc, Hcd, Ri, Ro]
                 .iter()
                 .filter(|hall| self.are_empty(&inner_hall.path_to(hall).unwrap()))
@@ -717,13 +678,29 @@ impl State {
         }
     }
 
+    fn room_for<'s>(&'s self, pod: &Pod) -> &'s Room {
+        match pod {
+            A => &self.ga,
+            B => &self.gb,
+            C => &self.gc,
+            D => &self.gd,
+        }
+    }
+
+    fn obscurity(&self, pod: &Pod) -> usize {
+        self.ga.obscurity(pod)
+            + self.gb.obscurity(pod)
+            + self.gc.obscurity(pod)
+            + self.gd.obscurity(pod)
+    }
+
     fn halls_evicting(&self, room: &Pos) -> Vec<(Pos, Pod)> {
-        match room.as_inner().get_inner_hall() {
+        match room.get_inner_hall() {
             Some(inner_hall) => [Lo, Li, Hab, Hbc, Hcd, Ri, Ro]
                 .iter()
                 .filter_map(|hall| {
                     if let Some(pod) = self.get_pos(hall) {
-                        if pod.is_dest(room) && self.are_empty(&hall.path_to(room).unwrap()) {
+                        if pod.is_dest(room) && self.are_empty(&hall.path_to(&inner_hall).unwrap()) {
                             Some((*hall, pod))
                         } else {
                             None
@@ -738,16 +715,23 @@ impl State {
     }
 
     fn rooms_evicting(&self) -> Vec<(Pos, Pod)> {
-        ROOM_SEARCH_ORDER
-            .iter()
-            .filter_map(|pod| match *pod {
-                A => self.ga.next_evicting(),
-                B => self.gb.next_evicting(),
-                C => self.gc.next_evicting(),
-                D => self.gd.next_evicting(),
-                _ => None,
-            })
-            .collect()
+        let mut evictable: Vec<(Pos, Pod)> = vec![
+            self.ga.next_evicting(),
+            self.gb.next_evicting(),
+            self.gc.next_evicting(),
+            self.gd.next_evicting(),
+        ]
+        .iter()
+        .filter_map(|e| *e)
+        .collect();
+        let take = if self.half { 2 } else { 4 };
+        evictable.sort_by_key(|(pos, pod)| {
+            (
+                (take - pos.depth()) * self.obscurity(&pos.goal_for_pod().unwrap()),
+                pod.energy(),
+            )
+        });
+        evictable
     }
 
     fn nexts(&self) -> Vec<(Self, usize)> {
@@ -797,6 +781,16 @@ impl State {
         }
     }
 
+    fn after_moves(&self, moves: &[(Pos, Pos)]) -> Option<(Self, usize)> {
+        moves.iter().fold(Some((*self, 0)), |acc, (from, to)| {
+            acc.and_then(|(acc_state, acc_energy)| {
+                acc_state
+                    .after_move(&from, &to)
+                    .map(|(new_state, new_energy)| (new_state, acc_energy + new_energy))
+            })
+        })
+    }
+
     fn after_move(&self, from: &Pos, to: &Pos) -> Option<(Self, usize)> {
         if from == to || to.is_no_loiter() {
             None
@@ -822,11 +816,6 @@ impl State {
             None => ".".to_owned(),
         }
     }
-
-    fn all() -> HashSet<Self> {
-        let mut all_states: HashSet<Self> = HashSet::new();
-        all_states
-    }
 }
 
 use std::cell::Cell;
@@ -837,10 +826,16 @@ use std::collections::HashSet;
 struct Burrow {
     energy: usize,
     state: State,
-    history: Vec<(State, usize)>,
 }
 
 impl Burrow {
+    fn new_from_state(state: State) -> Self {
+        Self {
+            energy: 0,
+            state: state,
+        }
+    }
+
     fn new(half: bool, inner: (Pod, Pod, Pod, Pod), outer: (Pod, Pod, Pod, Pod)) -> Self {
         let (ga, gb, gc, gd) = inner;
         let (goa, gob, goc, god) = outer;
@@ -877,12 +872,7 @@ impl Burrow {
             ]
         };
 
-        let state = State::new(half, rooms);
-        Self {
-            energy: 0,
-            state: state,
-            history: vec![(state, 0)],
-        }
+        Self::new_from_state(State::new(half, rooms))
     }
 
     fn pod_at(&self, pos: Pos) -> Option<Pod> {
@@ -909,57 +899,42 @@ impl Burrow {
         self.state.get_pos(&pos1).zip(self.state.get_pos(&pos2))
     }
 
-    fn copy(&self) -> Self {
-        Self {
-            energy: self.energy,
-            state: self.state,
-            history: self.history.to_owned(),
-        }
-    }
-
-    fn find_solutions(&self, states: &Vec<State>, min_energy: &mut Cell<usize>) -> Vec<Self> {
+    fn find_solutions(&self, states: &mut HashMap<State, usize>, min_energy: &mut Cell<usize>) {
         let original_min_energy = min_energy.get();
-        if self.energy >= original_min_energy
-            || self.state.min_energy_to_complete() > original_min_energy
+        let state_min_energy = *states.get(&self.state).unwrap_or(&original_min_energy);
+        if self.state.ga.pods.is_empty()
+            || self.state.gb.pods.is_empty()
+            || self.state.gc.pods.is_empty()
+            || self.state.gd.pods.is_empty()
         {
-            return vec![];
+            println!("<inter>:\n{}", self.to_string());
+        }
+        if self.energy >= state_min_energy {
+            //println!("returning {} >= {}", self.energy, state_min_energy);
+            return;
         } else if self.is_solution() {
             println!("solution!:\n{}", self.to_string());
-            min_energy.set(self.energy);
-            return vec![self.copy()];
+            if self.energy < original_min_energy {
+                min_energy.set(self.energy);
+            }
+            //
+            return;
         } else {
-            let visited_states = vec![states.to_owned(), vec![self.state]].concat();
+            states.insert(self.state, self.energy);
             let next_moves = self.state.nexts();
-            let mut solutions: Vec<Self> = Vec::new();
-            for next_move in next_moves
-                .iter()
-                .filter(|(nstate, energy)| !visited_states.contains(nstate))
-            {
+            for next_move in &next_moves {
                 let next_bur = self.transition(*next_move);
-                if states.is_empty() || min_energy.get() < original_min_energy {
+                if min_energy.get() < original_min_energy {
                     println!("{}", next_bur.to_string());
                     println!("min_egy: {}", min_energy.get());
                 }
+                next_bur.find_solutions(states, min_energy);
                 // if next_bur.is_dead_end() {
                 //     println!("dead end:\n{}", next_bur.to_string());
                 //     continue;
                 // }
-                solutions.extend(
-                    next_bur
-                        .find_solutions(&visited_states, min_energy)
-                        .into_iter(),
-                );
             }
-            return solutions;
         }
-    }
-
-    fn places(&self) -> Vec<(Pos, Pod)> {
-        self.state.to_places()
-    }
-
-    fn is_dead_end(&self) -> bool {
-        self.state.nexts().is_empty() && !self.is_solution()
     }
 
     fn transition(&self, new_state: (State, usize)) -> Self {
@@ -967,7 +942,6 @@ impl Burrow {
         Self {
             energy: self.energy + energy,
             state: state,
-            history: vec![self.history.to_owned(), vec![new_state]].concat(),
         }
     }
 
@@ -975,6 +949,25 @@ impl Burrow {
         self.state.is_complete()
     }
 }
+
+#[test]
+fn day23part1() {
+    let bur = read(true);
+    let mut min_energy = Cell::new(usize::MAX);
+    let mut states: HashMap<State, usize> = HashMap::new();
+    bur.find_solutions(&mut states, &mut min_energy);
+    assert_eq!(16489, min_energy.get(), "expect min energy");
+}
+
+#[test]
+fn day23part2() {
+    let bur = read(false);
+    let mut min_energy = Cell::new(usize::MAX);
+    let mut states: HashMap<State, usize> = HashMap::new();
+    bur.find_solutions(&mut states, &mut min_energy);
+    assert_eq!(43413, min_energy.get(), "expect min energy");
+}
+
 /// #############
 /// #...........#
 /// ###A#B#C#D###
@@ -984,7 +977,7 @@ impl ToString for Burrow {
     fn to_string(&self) -> String {
         let mut out: String = self.state.to_string();
         out = out + format!("energy:  {}\n", self.energy).as_str();
-        out = out + format!("history: {}\n", self.history.len()).as_str();
+        //out = out + format!("history: {}\n", self.history.len()).as_str();
         out
     }
 }
@@ -1092,11 +1085,107 @@ fn day23_test_state_nexts() {
 }
 
 #[test]
+fn day23_test_rooms_accepting() {
+    let bur_complete = Burrow::new(true, (A, B, C, D), (A, B, C, D));
+    let ras_complete = bur_complete.state.rooms_accepting();
+    assert!(bur_complete.is_solution());
+    assert_eq!(0, ras_complete.len());
+
+    let bur_accept_d = Burrow::new_from_state(
+        bur_complete
+            .state
+            .after_move(&Gd0, &Li)
+            .and_then(|(state, _)| state.after_move(&Gd1, &Ri))
+            .unwrap()
+            .0,
+    );
+    assert!(!bur_accept_d.is_solution());
+
+    let ras_accept_d = bur_accept_d.state.rooms_accepting();
+    assert_eq!(vec![Gd1], ras_accept_d);
+}
+
+#[test]
+fn day23_test_rooms_evicting() {
+    let bur = Burrow::new(true, (A, B, C, D), (A, B, C, D));
+    let ras = bur.state.rooms_evicting();
+    assert!(bur.is_solution());
+    assert_eq!(0, ras.len());
+
+    let bur_start = Burrow::new(true, (D, D, C, A), (B, C, B, A));
+    let res_start = bur_start.state.rooms_evicting();
+    assert!(!bur_start.is_solution());
+    assert_eq!(vec![(Gd0, A), (Ga0, D), (Gc0, C), (Gb0, D)], res_start);
+}
+
+#[test]
+fn day23_test_full_rooms_evicting() {
+    let bur_complete = Burrow::new_from_state(State::new(
+        false,
+        Pos::all_rooms()
+            .iter()
+            .map(|pos| (*pos, pos.goal_for_pod().unwrap()))
+            .collect(),
+    ));
+
+    assert!(bur_complete.is_solution());
+
+    // #############
+    // #...........#
+    // ###D#D#C#A###
+    //   #D#C#B#A#
+    //   #D#B#A#C#
+    //   #B#C#B#A#
+    //   #########
+    let bur_start = Burrow::new(false, (D, D, C, A), (B, C, B, A));
+
+    let res_start = bur_start.state.rooms_evicting();
+    assert!(!bur_start.is_solution());
+    assert_eq!(vec![(Gd0, A), (Ga0, D), (Gc0, C), (Gb0, D)], res_start);
+
+    let (state1, energy1) = bur_start
+        .state
+        .after_moves(&vec![(Gd0, Lo), (Gd1, Ro)])
+        .unwrap();
+    assert_eq!(
+        vec![(Gd2, C), (Ga0, D), (Gc0, C), (Gb0, D)],
+        state1.rooms_evicting()
+    );
+    assert!(state1.rooms_accepting().is_empty());
+    assert_eq!(9 + 4, energy1);
+
+    let (state2, energy2) = state1.after_moves(&vec![(Gd2, Li), (Gd3, Ri)]).unwrap();
+    assert_eq!(vec![(Ga0, D), (Gc0, C), (Gb0, D)], state2.rooms_evicting());
+
+    assert_eq!(1000 + 5, energy2);
+    assert_eq!(vec![Gd3], state2.rooms_accepting());
+    for gd in [Gd0, Gd1, Gd2, Gd3] {
+        assert!(state2.halls_evicting(&gd).is_empty());
+    }
+
+    let (state3, energy3) = state2
+        .after_moves(&vec![(Ga0, Gd3), (Ga1, Gd2), (Ga2, Gd1)])
+        .unwrap();
+    assert_eq!(vec![Gd0], state3.rooms_accepting());
+    assert_eq!(vec![Hab, Hbc, Hcd], state3.halls_accepting(&Ga3));
+    assert_eq!(vec![(Ri, A)], state3.halls_evicting(&Ga2));
+
+    // let (state2, energy3) = state2.after_moves(&vec![(Gd2, Li), (Gd3, Ri)]).unwrap();
+    // assert_eq!(
+    //     vec![(Gd2, C), (Ga0, D), (Gc0, C), (Gb0, D)],
+    //     state1.rooms_evicting()
+    // );
+
+    // assert_eq!(vec![Gd3], state2.rooms_accepting());
+    // assert_eq!(1000 + 5, energy2);
+}
+
+#[test]
 fn day23pre_part1() {
     let bur = read_test(true);
     let mut min_energy = Cell::new(usize::MAX);
-    let mut solutions: Vec<Burrow> = bur.find_solutions(&vec![], &mut min_energy);
-    solutions.sort_by_key(|b| b.energy);
+    let mut states: HashMap<State, usize> = HashMap::new();
+    bur.find_solutions(&mut states, &mut min_energy);
     assert_eq!(12521, min_energy.get(), "expect min energy");
 }
 

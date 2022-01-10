@@ -690,12 +690,6 @@ fn day20_test_parse_algo() {
         "expect 511 is lit: {}",
         algo.to_string()
     );
-    assert_eq!(
-        true,
-        algo.is_lit(512),
-        "expect 512 is lit: {}",
-        algo.to_string()
-    );
 }
 
 #[test]
